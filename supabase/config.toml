@@ -1,0 +1,34 @@
+project_id = "ieymegemufyoyxrwbtfv"
+
+[functions.get-mapbox-token]
+verify_jwt = false
+
+[functions.update-bus-location]
+verify_jwt = false
+
+[functions.create-driver-user]
+verify_jwt = false
+
+[functions.delete-driver-user]
+verify_jwt = false
+
+[functions.delete-user]
+verify_jwt = false
+
+[functions.create-test-users]
+verify_jwt = false
+
+[functions.link-driver-account]
+verify_jwt = false
+
+[functions.seed-sample-data]
+verify_jwt = false
+
+[functions.seed-comprehensive-data]
+verify_jwt = false
+
+[functions.debug-trips]
+verify_jwt = false
+
+[functions.traccar-webhook]
+verify_jwt = false
