@@ -28,7 +28,7 @@ If GitHub is NOT connected, or connected to the wrong repo:
    - Click "Connect Git Repository" or "Change Git Repository"
    - Select "GitHub"
    - Authorize Vercel to access your GitHub account (if prompted)
-   - Find and select: `sdkoncept/bus-buddy-system`
+   - Find and select: `kreationvibestudio/bus-buddy-system`
    - Click "Connect"
 
 2. **Configure Production Branch:**
@@ -38,7 +38,7 @@ If GitHub is NOT connected, or connected to the wrong repo:
 ### Step 3: Verify Webhook is Set Up
 
 1. **Check GitHub Webhooks:**
-   - Go to: https://github.com/sdkoncept/bus-buddy-system/settings/hooks
+   - Go to: https://github.com/kreationvibestudio/bus-buddy-system/settings/hooks
    - You should see a webhook from Vercel
    - It should show recent deliveries when you push
 
@@ -87,7 +87,7 @@ If you prefer using CLI but want auto-deployment:
 
 **Solution:**
 - Make sure you're logged into Vercel with the correct account
-- Check that you have access to the `sdkoncept` GitHub organization
+- Check that you have access to the `kreationvibestudio` GitHub organization
 - Try disconnecting and reconnecting the integration
 
 ### Issue: Webhook Not Working
@@ -105,7 +105,7 @@ If you prefer using CLI but want auto-deployment:
 **Solution:**
 1. In Vercel → Settings → Git
 2. Click "Disconnect" or "Change Git Repository"
-3. Connect to the correct repository: `sdkoncept/bus-buddy-system`
+3. Connect to the correct repository: `kreationvibestudio/bus-buddy-system`
 
 ### Issue: Deployments Not Triggering
 
@@ -134,7 +134,7 @@ The fastest way to fix auto-deployment:
    - Settings → Git
    - Click "Disconnect" (if connected)
    - Click "Connect Git Repository"
-   - Select GitHub → `sdkoncept/bus-buddy-system`
+   - Select GitHub → `kreationvibestudio/bus-buddy-system`
    - Confirm Production Branch = `main`
 
 2. **Test:**
@@ -146,7 +146,7 @@ The fastest way to fix auto-deployment:
 After setup, when you push to GitHub:
 
 1. **GitHub:**
-   - Commit shows in: https://github.com/sdkoncept/bus-buddy-system/commits/main
+   - Commit shows in: https://github.com/kreationvibestudio/bus-buddy-system/commits/main
 
 2. **Vercel:**
    - New deployment appears automatically
@@ -154,13 +154,13 @@ After setup, when you push to GitHub:
    - Build starts within seconds
 
 3. **Build Log:**
-   - Should show: "Cloning github.com/sdkoncept/bus-buddy-system"
+   - Should show: "Cloning github.com/kreationvibestudio/bus-buddy-system"
    - Should show your latest commit hash
 
 ## Current Project Info
 
 - **Vercel Project:** bus-management-system
-- **GitHub Repo:** sdkoncept/bus-buddy-system
+- **GitHub Repo:** kreationvibestudio/bus-buddy-system
 - **Branch:** main
 - **Vercel URL:** https://bus-management-system-odx5dox3p-sdkoncepts-projects-29b2d379.vercel.app
 

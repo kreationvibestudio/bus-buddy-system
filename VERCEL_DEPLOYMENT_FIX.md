@@ -36,7 +36,7 @@ Vercel should automatically detect the new commit `7c971de` and start a new buil
 5. **Verify the Commit:**
    - In the build log, you should see:
    ```
-   Cloning github.com/sdkoncept/bus-buddy-system (Branch: main, Commit: 7c971de)
+   Cloning github.com/kreationvibestudio/bus-buddy-system (Branch: main, Commit: 7c971de)
    ```
    - NOT `73c74a8`
 
@@ -78,7 +78,7 @@ If you still see the PWA error after building the latest commit:
 
 3. **Verify GitHub Integration:**
    - Settings → Git
-   - Ensure connected to: `sdkoncept/bus-buddy-system`
+   - Ensure connected to: `kreationvibestudio/bus-buddy-system`
    - Branch: `main`
 
 ## Quick Checklist
@@ -91,6 +91,6 @@ If you still see the PWA error after building the latest commit:
 
 ## Contact Points
 
-- **GitHub Repo:** https://github.com/sdkoncept/bus-buddy-system
+- **GitHub Repo:** https://github.com/kreationvibestudio/bus-buddy-system
 - **Vercel Dashboard:** https://vercel.com/dashboard
 - **Latest Commit:** `7c971de`

@@ -1,0 +1,14 @@
+---
+description: Canonical project and deployment info
+alwaysApply: true
+---
+
+# Project Info
+
+- **GitHub repo:** `kreationvibestudio/bus-buddy-system`
+- **URL:** https://github.com/kreationvibestudio/bus-buddy-system
+- **Production domain:** bms.sdkoncept.com
+
+When committing, pushing, or configuring deployment (e.g. Vercel), use this repo—not sdkoncept/bus-buddy-system.
+
+See `PROJECT_INFO.md` for full reference.

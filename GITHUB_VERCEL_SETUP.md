@@ -3,7 +3,7 @@
 ## Your Current Setup
 
 ### GitHub Repository
-- **Repository URL:** `https://github.com/sdkoncept/bus-buddy-system.git`
+- **Repository URL:** `https://github.com/kreationvibestudio/bus-buddy-system.git`
 - **Branch:** `main`
 - **Latest Commit:** `0ae97c2` - "Fix PWA plugin build error on Vercel"
 
@@ -23,7 +23,7 @@
 
 ### Step 2: Verify GitHub Integration
 1. In your Vercel project dashboard, go to **Settings** → **Git**
-2. Check if it's connected to: `sdkoncept/bus-buddy-system`
+2. Check if it's connected to: `kreationvibestudio/bus-buddy-system`
 3. Verify the branch is set to `main`
 
 ### Step 3: Check Recent Deployments
@@ -91,7 +91,7 @@ vercel --prod
 ## Verify Your Setup
 
 ### Check GitHub Repository
-Visit: `https://github.com/sdkoncept/bus-buddy-system`
+Visit: `https://github.com/kreationvibestudio/bus-buddy-system`
 
 You should see:
 - Latest commit: `0ae97c2`
@@ -117,7 +117,7 @@ You should see:
 git remote -v
 
 # Should show:
-# origin  https://github.com/sdkoncept/bus-buddy-system.git
+# origin  https://github.com/kreationvibestudio/bus-buddy-system.git
 ```
 
 ### 2. Check Latest Commits
@@ -126,7 +126,7 @@ git remote -v
 git log --oneline -5
 
 # Verify they're on GitHub
-# Visit: https://github.com/sdkoncept/bus-buddy-system/commits/main
+# Visit: https://github.com/kreationvibestudio/bus-buddy-system/commits/main
 ```
 
 ### 3. Force a New Deployment
@@ -152,8 +152,8 @@ git push origin main
 ## Quick Reference
 
 ### Your GitHub Info:
-- **Repo:** `sdkoncept/bus-buddy-system`
-- **URL:** `https://github.com/sdkoncept/bus-buddy-system`
+- **Repo:** `kreationvibestudio/bus-buddy-system`
+- **URL:** `https://github.com/kreationvibestudio/bus-buddy-system`
 - **Branch:** `main`
 
 ### Your Vercel Info:
@@ -191,5 +191,5 @@ git push origin main
 If you're still having issues:
 1. Check Vercel's deployment logs
 2. Verify your GitHub repository is public (or you've granted Vercel access)
-3. Make sure your Vercel account has access to the `sdkoncept` organization
+3. Make sure your Vercel account has access to the `kreationvibestudio` organization
 4. Check if there are any build errors in the Vercel dashboard
