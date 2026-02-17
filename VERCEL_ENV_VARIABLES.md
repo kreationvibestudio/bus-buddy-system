@@ -2,7 +2,7 @@
 
 ## Required Environment Variables for Your Project
 
-Your Bus Buddy System needs **2 required environment variables** in Vercel:
+Your Bus Buddy System needs **3 environment variables** in Vercel:
 
 ### 1. `VITE_SUPABASE_URL`
 - **Type**: String
@@ -17,6 +17,13 @@ Your Bus Buddy System needs **2 required environment variables** in Vercel:
 - **Description**: Your Supabase anon/public key (safe to expose in frontend)
 - **Format**: Long alphanumeric string
 - **Example**: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
+
+### 3. `VITE_MAPBOX_TOKEN`
+- **Type**: String
+- **Required**: Yes (for maps/tracking)
+- **Description**: Mapbox public token (pk. prefix – safe to expose)
+- **Format**: `pk.eyJ1...`
+- **Note**: Using this avoids CORS when fetching from the Edge Function
 
 ## How to Get Your Supabase Credentials
 

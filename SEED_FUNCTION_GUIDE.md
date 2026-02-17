@@ -55,11 +55,16 @@ After deployment, you can invoke it via:
 **Option B: Using curl/HTTP request**
 ```bash
 curl -X POST https://ccvjtchhcjzpiefrgbmk.supabase.co/functions/v1/seed-comprehensive-data \
-  -H "Authorization: Bearer YOUR_SERVICE_ROLE_KEY" \
+  -H "Authorization: Bearer YOUR_ANON_OR_SERVICE_KEY" \
   -H "Content-Type: application/json"
 ```
 
-Get your service_role key from: **Dashboard > Settings > API > service_role key**
+**Production:** If you set `SEED_SECRET` in Supabase secrets, add:
+```bash
+  -H "X-Seed-Secret: YOUR_SEED_SECRET"
+```
+
+Get your keys from: **Dashboard > Settings > API**
 
 ---
 

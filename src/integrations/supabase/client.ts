@@ -2,7 +2,8 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+// Strip trailing slash to prevent double-slash in functions URL (e.g. ...co//functions/v1)
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL || '').replace(/\/+$/, '');
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 // Import the supabase client like this:

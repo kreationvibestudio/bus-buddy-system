@@ -2,7 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-seed-secret',
 };
 
 interface TestUser {
@@ -33,6 +33,19 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Require SEED_SECRET to prevent unauthorized seeding in production
+    const seedSecret = Deno.env.get('SEED_SECRET');
+    const providedSecret = req.headers.get('X-Seed-Secret');
+    if (seedSecret && (!providedSecret || providedSecret !== seedSecret)) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized. Valid X-Seed-Secret header required.' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    if (!seedSecret) {
+      console.warn('SEED_SECRET not set - consider setting it for production security');
+    }
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     

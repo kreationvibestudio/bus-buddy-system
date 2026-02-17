@@ -9,6 +9,14 @@ export function useMapboxToken() {
   useEffect(() => {
     async function fetchToken() {
       try {
+        // Prefer VITE_MAPBOX_TOKEN if set (avoids CORS, Mapbox pk. tokens are meant to be public)
+        const envToken = import.meta.env.VITE_MAPBOX_TOKEN;
+        if (envToken?.startsWith('pk.')) {
+          setToken(envToken);
+          setLoading(false);
+          return;
+        }
+
         const { data, error: fnError } = await supabase.functions.invoke('get-mapbox-token', {
           method: 'GET',
         });

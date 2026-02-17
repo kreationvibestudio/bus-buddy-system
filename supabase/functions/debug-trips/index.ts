@@ -11,10 +11,41 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Require admin JWT - debug endpoint exposes internal data
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized. Admin session required.' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+    const supabaseAuth = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
+    if (userError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized. Invalid session.' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    const { data: roleData } = await supabaseAdmin
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .single();
+    if (roleData?.role !== 'admin') {
+      return new Response(
+        JSON.stringify({ error: 'Forbidden. Admin role required.' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const supabase = supabaseAdmin;
 
     // Get Lagos - Benin City routes (both directions)
     const { data: routes } = await supabase

@@ -234,9 +234,10 @@ To populate the database with realistic sample data for client demonstration:
 2. **Call the function:**
    ```bash
    curl -X POST https://YOUR_PROJECT_REF.supabase.co/functions/v1/seed-comprehensive-data \
-     -H "Authorization: Bearer YOUR_SERVICE_ROLE_KEY" \
+     -H "Authorization: Bearer YOUR_ANON_OR_SERVICE_KEY" \
      -H "Content-Type: application/json"
    ```
+   If `SEED_SECRET` is set in Supabase secrets, add: `-H "X-Seed-Secret: YOUR_SEED_SECRET"`
 
    Or use the Supabase Dashboard:
    - Go to **Edge Functions** → **seed-comprehensive-data**

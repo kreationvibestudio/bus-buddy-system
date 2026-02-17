@@ -232,6 +232,35 @@ export type Database = {
           },
         ]
       }
+      location_shares: {
+        Row: {
+          id: string
+          share_token: string
+          booking_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          share_token: string
+          booking_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          share_token?: string
+          booking_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "location_shares_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       complaints: {
         Row: {
           assigned_to: string | null

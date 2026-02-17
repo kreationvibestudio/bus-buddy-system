@@ -26,9 +26,30 @@ serve(async (req) => {
   }
 
   try {
+    // Require JWT - only authenticated drivers can update bus location
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized. Valid driver session required.' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    // Use user's JWT so RLS enforces "Drivers can insert own bus locations"
+    const supabase = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    // Verify user is authenticated
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized. Invalid or expired session.' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Parse and validate input
     let rawBody;

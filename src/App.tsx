@@ -34,6 +34,7 @@ const MyBookingsPage = lazy(() => import("./pages/passenger/MyBookingsPage"));
 const SettingsPage = lazy(() => import("./pages/settings/SettingsPage"));
 const ReportsPage = lazy(() => import("./pages/reports/ReportsPage"));
 const TrackingPage = lazy(() => import("./pages/tracking/TrackingPage"));
+const ShareTrackPage = lazy(() => import("./pages/tracking/ShareTrackPage"));
 const StationsPage = lazy(() => import("./pages/stations/StationsPage"));
 const JobCardsPage = lazy(() => import("./pages/mechanic/JobCardsPage"));
 const UserManagementPage = lazy(() => import("./pages/admin/UserManagementPage"));
@@ -71,7 +72,12 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/reset-password" element={<ResetPassword />} />
-            
+            <Route path="/track/:token" element={
+              <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+                <ShareTrackPage />
+              </Suspense>
+            } />
+
             {/* Protected Dashboard Routes */}
             <Route element={<DashboardLayout />}>
               {/* Dashboard - accessible by all authenticated users */}

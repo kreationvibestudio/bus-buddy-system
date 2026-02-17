@@ -1,10 +1,10 @@
-project_id = "ieymegemufyoyxrwbtfv"
+project_id = "ccvjtchhcjzpiefrgbmk"
 
 [functions.get-mapbox-token]
 verify_jwt = false
 
 [functions.update-bus-location]
-verify_jwt = false
+verify_jwt = true
 
 [functions.create-driver-user]
 verify_jwt = false
@@ -28,7 +28,10 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.debug-trips]
-verify_jwt = false
+verify_jwt = true
 
 [functions.traccar-webhook]
+verify_jwt = false
+
+[functions.get-shared-location]
 verify_jwt = false
