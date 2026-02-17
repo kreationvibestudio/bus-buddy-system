@@ -4,6 +4,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "test:traccar": "bash scripts/test-traccar-webhook.sh",
+    "deploy:webhook": "npx supabase functions deploy traccar-webhook --project-ref ccvjtchhcjzpiefrgbmk",
     "dev": "vite",
     "prebuild": "node scripts/prebuild-check.js",
     "build": "vite build",

@@ -35,7 +35,6 @@ const routeLabels: Record<string, string> = {
   'book': 'Book Ticket',
   'my-bookings': 'My Bookings',
   'driver': 'Driver',
-  'driver-app': 'Driver App',
   'trips': 'Trips',
   'passengers': 'Passengers',
   'incidents': 'Incidents',

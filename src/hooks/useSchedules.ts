@@ -112,13 +112,31 @@ export function useTrips() {
         `)
         .gte('trip_date', today.toISOString().split('T')[0])
         .lte('trip_date', thirtyDaysLater.toISOString().split('T')[0])
-        .eq('status', 'scheduled')
+        .in('status', ['scheduled', 'in_progress', 'completed'])
         .order('trip_date', { ascending: true })
         .limit(5000);
       
       if (error) throw error;
       return data as Trip[];
     },
+  });
+}
+
+// Trips for a specific date (for filtering available buses/drivers when creating a trip)
+export function useTripsForDate(tripDate: string | null) {
+  return useQuery({
+    queryKey: ['trips-for-date', tripDate],
+    queryFn: async () => {
+      if (!tripDate) return [];
+      const { data, error } = await supabase
+        .from('trips')
+        .select('id, bus_id, driver_id, trip_date, departure_time, arrival_time, status')
+        .eq('trip_date', tripDate)
+        .in('status', ['scheduled', 'in_progress']);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tripDate,
   });
 }
 
@@ -159,6 +177,7 @@ export function useCreateTrip() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trips'] });
+      queryClient.invalidateQueries({ queryKey: ['trips-for-date'] });
       toast.success('Trip created successfully');
     },
     onError: (error) => {

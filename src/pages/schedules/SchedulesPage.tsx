@@ -1,8 +1,10 @@
-import { useState } from 'react';
-import { useSchedules, useTrips, useCreateTrip } from '@/hooks/useSchedules';
+import { useState, useMemo, useEffect } from 'react';
+import { useSchedules, useTrips, useTripsForDate, useCreateTrip } from '@/hooks/useSchedules';
 import { useRoutes } from '@/hooks/useRoutes';
 import { useBuses } from '@/hooks/useBuses';
 import { useDrivers } from '@/hooks/useDrivers';
+import { useStartTrip } from '@/hooks/useDriverTrips';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,30 +14,67 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Calendar, Clock, Search } from 'lucide-react';
+import { Plus, Calendar, Clock, Search, CalendarPlus } from 'lucide-react';
 import { format } from 'date-fns';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-export default function SchedulesPage() {
-  const { data: schedules, isLoading: schedulesLoading } = useSchedules();
-  const { data: trips, isLoading: tripsLoading } = useTrips();
-  const { data: routes } = useRoutes();
-  const { data: buses } = useBuses();
-  const { data: drivers } = useDrivers();
-  const createTrip = useCreateTrip();
+const defaultTripDate = format(new Date(), 'yyyy-MM-dd');
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isTripDialogOpen, setIsTripDialogOpen] = useState(false);
-  const [tripForm, setTripForm] = useState({
+export default function SchedulesPage() {
+  const [tripForm, setTripForm] = useState<{
+    schedule_id?: string;
+    route_id: string;
+    bus_id: string;
+    driver_id: string;
+    trip_date: string;
+    departure_time: string;
+    arrival_time: string;
+    available_seats: number;
+  }>({
     route_id: '',
     bus_id: '',
     driver_id: '',
-    trip_date: format(new Date(), 'yyyy-MM-dd'),
+    trip_date: defaultTripDate,
     departure_time: '08:00',
     arrival_time: '09:00',
     available_seats: 40,
   });
+
+  const { data: schedules, isLoading: schedulesLoading } = useSchedules();
+  const { data: trips, isLoading: tripsLoading } = useTrips();
+  const { data: tripsOnSelectedDate } = useTripsForDate(tripForm.trip_date);
+  const { data: routes } = useRoutes();
+  const { data: buses } = useBuses();
+  const { data: drivers } = useDrivers();
+  const createTrip = useCreateTrip();
+  const startTrip = useStartTrip();
+  const { role } = useAuth();
+
+  // Exclude buses and drivers that already have a trip on the selected date
+  const { availableBuses, availableDrivers } = useMemo(() => {
+    const busyBusIds = new Set((tripsOnSelectedDate || []).map((t: { bus_id: string }) => t.bus_id).filter(Boolean));
+    const busyDriverIds = new Set((tripsOnSelectedDate || []).map((t: { driver_id: string }) => t.driver_id).filter(Boolean));
+    return {
+      availableBuses: (buses || []).filter((b: { id: string; status: string }) => b.status === 'active' && !busyBusIds.has(b.id)),
+      availableDrivers: (drivers || []).filter((d: { id: string; status: string }) => d.status === 'active' && !busyDriverIds.has(d.id)),
+    };
+  }, [buses, drivers, tripsOnSelectedDate]);
+
+  // Clear bus/driver if they become unavailable when date changes
+  useEffect(() => {
+    const busyBusIds = new Set((tripsOnSelectedDate || []).map((t: { bus_id: string }) => t.bus_id).filter(Boolean));
+    const busyDriverIds = new Set((tripsOnSelectedDate || []).map((t: { driver_id: string }) => t.driver_id).filter(Boolean));
+    setTripForm((prev) => ({
+      ...prev,
+      ...(prev.bus_id && busyBusIds.has(prev.bus_id) ? { bus_id: '' } : {}),
+      ...(prev.driver_id && busyDriverIds.has(prev.driver_id) ? { driver_id: '' } : {}),
+    }));
+  }, [tripForm.trip_date, tripsOnSelectedDate]);
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState('trips');
+  const [isTripDialogOpen, setIsTripDialogOpen] = useState(false);
 
   const getStatusBadge = (status: string | null) => {
     const variants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -45,6 +84,23 @@ export default function SchedulesPage() {
       cancelled: 'destructive',
     };
     return <Badge variant={variants[status || 'scheduled'] || 'outline'}>{status || 'scheduled'}</Badge>;
+  };
+
+  const openTripFromTemplate = (schedule: (typeof schedules)[0]) => {
+    const dep = String(schedule.departure_time || '08:00').slice(0, 5);
+    const arr = String(schedule.arrival_time || '09:00').slice(0, 5);
+    setTripForm({
+      schedule_id: schedule.id,
+      route_id: schedule.route_id,
+      bus_id: schedule.bus_id || '',
+      driver_id: schedule.driver_id || '',
+      trip_date: format(new Date(), 'yyyy-MM-dd'),
+      departure_time: dep,
+      arrival_time: arr,
+      available_seats: 40,
+    });
+    setActiveTab('trips');
+    setIsTripDialogOpen(true);
   };
 
   const handleTripSubmit = async (e: React.FormEvent) => {
@@ -84,7 +140,7 @@ export default function SchedulesPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="trips" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList>
           <TabsTrigger value="trips">Trips</TabsTrigger>
           <TabsTrigger value="schedules">Schedule Templates</TabsTrigger>
@@ -151,6 +207,7 @@ export default function SchedulesPage() {
                       className="pl-8"
                     />
                   </div>
+                  {role === 'admin' && (
                   <Dialog open={isTripDialogOpen} onOpenChange={setIsTripDialogOpen}>
                     <DialogTrigger asChild>
                       <Button className="gap-2">
@@ -187,11 +244,16 @@ export default function SchedulesPage() {
                                 <SelectValue placeholder="Select bus" />
                               </SelectTrigger>
                               <SelectContent>
-                                {buses?.filter(b => b.status === 'active').map((bus) => (
+                                {availableBuses.map((bus: { id: string; registration_number: string; model: string }) => (
                                   <SelectItem key={bus.id} value={bus.id}>
                                     {bus.registration_number} - {bus.model}
                                   </SelectItem>
                                 ))}
+                                {availableBuses.length === 0 && (
+                                  <div className="px-2 py-4 text-sm text-muted-foreground text-center">
+                                    No buses available (all have trips on this date)
+                                  </div>
+                                )}
                               </SelectContent>
                             </Select>
                           </div>
@@ -202,11 +264,16 @@ export default function SchedulesPage() {
                                 <SelectValue placeholder="Select driver" />
                               </SelectTrigger>
                               <SelectContent>
-                                {drivers?.filter(d => d.status === 'active').map((driver) => (
+                                {availableDrivers.map((driver: { id: string; profile?: { full_name?: string }; license_number: string }) => (
                                   <SelectItem key={driver.id} value={driver.id}>
                                     {driver.profile?.full_name || driver.license_number}
                                   </SelectItem>
                                 ))}
+                                {availableDrivers.length === 0 && (
+                                  <div className="px-2 py-4 text-sm text-muted-foreground text-center">
+                                    No drivers available (all have trips on this date)
+                                  </div>
+                                )}
                               </SelectContent>
                             </Select>
                           </div>
@@ -254,6 +321,7 @@ export default function SchedulesPage() {
                       </form>
                     </DialogContent>
                   </Dialog>
+                  )}
                 </div>
               </div>
             </CardHeader>
@@ -268,6 +336,7 @@ export default function SchedulesPage() {
                     <TableHead>Arrival</TableHead>
                     <TableHead>Available Seats</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -280,11 +349,23 @@ export default function SchedulesPage() {
                       <TableCell>{trip.arrival_time}</TableCell>
                       <TableCell>{trip.available_seats}</TableCell>
                       <TableCell>{getStatusBadge(trip.status)}</TableCell>
+                      <TableCell className="text-right">
+                        {trip.status === 'scheduled' && role === 'admin' && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => startTrip.mutate(trip.id)}
+                            disabled={startTrip.isPending}
+                          >
+                            {startTrip.isPending ? 'Starting...' : 'Start Trip'}
+                          </Button>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
                   {filteredTrips?.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                         No trips found
                       </TableCell>
                     </TableRow>
@@ -300,7 +381,9 @@ export default function SchedulesPage() {
             <CardHeader>
               <div>
                 <CardTitle>Schedule Templates</CardTitle>
-                <CardDescription>Recurring schedule configurations</CardDescription>
+                <CardDescription>
+                  Recurring patterns (e.g. Lagos–Benin at 8am daily). Click &quot;Create trip&quot; to plan a trip from a template—route, times, bus, and driver are prefilled.
+                </CardDescription>
               </div>
             </CardHeader>
             <CardContent>
@@ -313,11 +396,16 @@ export default function SchedulesPage() {
                     <TableHead>Arrival</TableHead>
                     <TableHead>Days</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {schedules?.map((schedule) => (
-                    <TableRow key={schedule.id}>
+                    <TableRow
+                      key={schedule.id}
+                      className={role === 'admin' ? 'cursor-pointer hover:bg-muted/50' : ''}
+                      onClick={role === 'admin' ? () => openTripFromTemplate(schedule) : undefined}
+                    >
                       <TableCell className="font-medium">{schedule.route?.name || '-'}</TableCell>
                       <TableCell>{schedule.bus?.registration_number || '-'}</TableCell>
                       <TableCell>{schedule.departure_time}</TableCell>
@@ -336,8 +424,28 @@ export default function SchedulesPage() {
                           {schedule.is_active ? 'Active' : 'Inactive'}
                         </Badge>
                       </TableCell>
+                      <TableCell className="text-right" onClick={(e) => role === 'admin' && e.stopPropagation()}>
+                        {role === 'admin' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openTripFromTemplate(schedule)}
+                          className="gap-1.5"
+                        >
+                          <CalendarPlus className="h-3.5 w-3.5" />
+                          Create trip
+                        </Button>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
+                  {schedules?.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                        No schedule templates. Add templates to quickly create trips from recurring patterns.
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </CardContent>

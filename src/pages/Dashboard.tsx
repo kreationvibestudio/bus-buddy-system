@@ -2,6 +2,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Bus, Users, Route, Ticket, TrendingUp, AlertTriangle } from 'lucide-react';
 import { PendingApprovalsWidget } from '@/components/dashboard/PendingApprovalsWidget';
+import { LiveTrackingWidget } from '@/components/dashboard/LiveTrackingWidget';
 import { MechanicDashboard } from '@/components/dashboard/MechanicDashboard';
 import { DriverDashboard } from '@/components/dashboard/DriverDashboard';
 import { PassengerDashboard } from '@/components/dashboard/PassengerDashboard';
@@ -99,6 +100,9 @@ export default function Dashboard() {
 
       {/* Pending Approvals Widget - for admin and storekeeper */}
       <PendingApprovalsWidget />
+
+      {/* Live Tracking from Traccar */}
+      <LiveTrackingWidget />
 
       <div className="grid gap-6 md:grid-cols-2">
         {/* Recent Activity - placeholder for now */}

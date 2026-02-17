@@ -4,8 +4,6 @@ import { format } from 'date-fns';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useStartTrip, useEndTrip, useTripPassengers } from '@/hooks/useDriverTrips';
-import { useGPSTracking } from '@/hooks/useGPSTracking';
-import { useCapacitorGPS } from '@/hooks/useCapacitorGPS';
 import { sampleTrips, samplePassengers } from '@/data/sampleDriverData';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -31,9 +29,7 @@ import {
   Square,
   Navigation,
   AlertTriangle,
-  ArrowLeft,
-  Locate,
-  Signal
+  ArrowLeft
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -88,41 +84,16 @@ export default function DriverTripDetailPage() {
   const startTrip = useStartTrip();
   const endTrip = useEndTrip();
 
-  // GPS Tracking
-  // IMPORTANT: On native (Capacitor) we must not start the browser geolocation watcher,
-  // otherwise we can end up with duplicate watchers and confusing state.
-  const nativeGps = useCapacitorGPS({
-    tripId: id,
-    busId: trip?.bus_id,
-    enabled: trip?.status === 'in_progress',
-  });
-
-  const webGps = useGPSTracking({
-    tripId: id,
-    busId: trip?.bus_id,
-    enabled: !nativeGps.isNative && trip?.status === 'in_progress',
-  });
-
-  const gps = nativeGps.isNative ? nativeGps : webGps;
-  const { position, isTracking, error: gpsError, startTracking, stopTracking } = gps;
-
   const handleStartTrip = async () => {
     if (!id) return;
-    console.log('[DriverTripDetailPage] Starting trip:', id);
     await startTrip.mutateAsync(id);
     setShowStartDialog(false);
-    // Explicitly start GPS tracking after trip starts
-    console.log('[DriverTripDetailPage] Trip started, starting GPS tracking...');
-    startTracking();
   };
 
   const handleEndTrip = async () => {
     if (!id) return;
-    console.log('[DriverTripDetailPage] Ending trip:', id);
-    stopTracking();
     await endTrip.mutateAsync(id);
     setShowEndDialog(false);
-    console.log('[DriverTripDetailPage] Trip ended, GPS tracking stopped');
   };
 
   const getStatusBadge = (status: string | null) => {
@@ -177,42 +148,6 @@ export default function DriverTripDetailPage() {
         </div>
         {getStatusBadge(trip.status)}
       </div>
-
-      {/* GPS Status Card */}
-      {trip.status === 'in_progress' && (
-        <Card className="border-info">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-full ${isTracking ? 'bg-success/20' : 'bg-muted'}`}>
-                  <Signal className={`h-5 w-5 ${isTracking ? 'text-success animate-pulse' : 'text-muted-foreground'}`} />
-                </div>
-                <div>
-                  <p className="font-medium">
-                    {isTracking ? 'GPS Active' : 'GPS Inactive'}
-                  </p>
-                  {position && (
-                    <p className="text-sm text-muted-foreground">
-                      {position.latitude.toFixed(6)}, {position.longitude.toFixed(6)}
-                    </p>
-                  )}
-                  {gpsError && (
-                    <p className="text-sm text-destructive">{gpsError}</p>
-                  )}
-                </div>
-              </div>
-              <Button
-                variant={isTracking ? 'destructive' : 'default'}
-                size="sm"
-                onClick={isTracking ? stopTracking : startTracking}
-              >
-                <Locate className="h-4 w-4 mr-2" />
-                {isTracking ? 'Stop' : 'Start'} GPS
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Route Info */}
       <Card>
@@ -371,7 +306,7 @@ export default function DriverTripDetailPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Start Trip?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will mark your trip as in progress and start GPS tracking to share your location with passengers.
+              This will mark your trip as in progress. Location is tracked via Traccar on the bus.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -388,7 +323,7 @@ export default function DriverTripDetailPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>End Trip?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will mark your trip as completed and stop GPS tracking.
+              This will mark your trip as completed.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

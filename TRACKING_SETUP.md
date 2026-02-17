@@ -1,18 +1,23 @@
 # Live Tracking Setup Guide
 
-## GPS Data Sources
+## GPS Data Source: Traccar Only
 
-Bus locations come from **two sources**:
+All tracking data comes from **Traccar** hardware devices installed on buses:
 
-### 1. Traccar (Hardware GPS)
-- Traccar devices on buses send positions to the `traccar-webhook` Edge Function
+- Traccar devices send positions to the `traccar-webhook` Edge Function
 - Each bus must have its **Traccar Device ID** set in **Fleet Management** → Edit Bus → "Traccar Device ID"
 - Only buses with a mapped `traccar_device_id` receive data from Traccar
 
-### 2. Driver App (Phone GPS)
-- When a driver is on an active trip and enables GPS in the Driver App, their phone sends location via `update-bus-location`
-- This uses the driver's device GPS (Capacitor/Geolocation API)
-- **LG-001-EGL** showing live data with only 2 Traccar devices means: a driver with LG-001-EGL assigned is on an active trip with GPS enabled (phone-based tracking)
+### Data from Traccar
+
+The webhook receives and stores:
+- **Position**: latitude, longitude
+- **Speed**: km/h (converted from knots)
+- **Direction**: heading/course (0–360°)
+- **Odometer**: total distance in km (from `totalDistance` or `distance` in attributes)
+- **Geofence**: current geofence name when device is inside one
+
+These are displayed on the Live Tracking page and Dashboard.
 
 ## Fixing Wrong Bus Locations
 
@@ -25,7 +30,7 @@ If buses show in the wrong city (e.g. Lagos instead of Benin City):
 2. **Delete stale/incorrect data** (optional):
    - In Supabase Dashboard → Table Editor → `bus_locations`
    - Delete rows with wrong coordinates (or for specific bus_ids)
-   - New data from Traccar/Driver App will replace them
+   - New data from Traccar will replace them
 
 3. **Benin City coordinates**: lat 6.3350, lng 5.6270 (Edo state)
 

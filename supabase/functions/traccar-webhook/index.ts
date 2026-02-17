@@ -16,10 +16,13 @@ serve(async (req) => {
   }
 
   try {
-    // Verify Bearer token (Traccar forward.header: Authorization: Bearer SERVICE_ROLE_KEY)
+    // Accept: Bearer with service_role key OR TRACCAR_WEBHOOK_SECRET (set in Edge Function secrets)
     const authHeader = req.headers.get('Authorization');
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    if (!authHeader?.startsWith('Bearer ') || authHeader.slice(7) !== supabaseServiceKey) {
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')?.trim();
+    const webhookSecret = Deno.env.get('TRACCAR_WEBHOOK_SECRET')?.trim();
+    const isValid = token && (token === serviceKey || (webhookSecret && token === webhookSecret));
+    if (!isValid) {
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -37,9 +40,13 @@ serve(async (req) => {
     }
 
     const device = rawBody.device as Record<string, unknown> | undefined;
-    const deviceId = rawBody.deviceId ?? device?.id;
-    const lat = rawBody.latitude ?? rawBody.lat;
-    const lng = rawBody.longitude ?? rawBody.lng ?? rawBody.lon;
+    const position = rawBody.position as Record<string, unknown> | undefined;
+    // Traccar sends { device: { id }, position: { deviceId, latitude, longitude, ... } }
+    const deviceId = rawBody.deviceId ?? position?.deviceId ?? device?.id;
+    const lat = rawBody.latitude ?? position?.latitude ?? rawBody.lat;
+    const lng = rawBody.longitude ?? position?.longitude ?? rawBody.lng ?? rawBody.lon;
+
+    console.log('[traccar-webhook] Received', { deviceId, lat, lng, hasDevice: !!device, hasPosition: !!position });
 
     if (deviceId == null || typeof lat !== 'number' || typeof lng !== 'number') {
       return new Response(
@@ -57,7 +64,7 @@ serve(async (req) => {
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
-      supabaseServiceKey
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
     const { data: bus, error: busError } = await supabase
@@ -74,12 +81,17 @@ serve(async (req) => {
       );
     }
 
-    const speedKnots = rawBody.speed ?? 0;
+    const speedKnots = rawBody.speed ?? position?.speed ?? 0;
     const speedKmh = typeof speedKnots === 'number' ? speedKnots * 1.852 : null;
-    const course = rawBody.course ?? rawBody.heading ?? null;
+    const course = rawBody.course ?? rawBody.heading ?? position?.course ?? null;
     const heading = course != null ? Math.round(Number(course)) % 360 : null;
 
-    const deviceTime = rawBody.deviceTime ?? rawBody.fixTime ?? rawBody.serverTime;
+    const attrs = (rawBody.attributes ?? position?.attributes) as Record<string, unknown> | undefined;
+    const totalDistM = attrs?.totalDistance ?? attrs?.distance ?? rawBody.totalDistance;
+    const odometerKm = totalDistM != null ? Number(totalDistM) / 1000 : null;
+    const geofenceName = (rawBody.geofence ?? attrs?.geofence ?? attrs?.geofenceName) as string | undefined;
+
+    const deviceTime = rawBody.deviceTime ?? rawBody.fixTime ?? position?.deviceTime ?? position?.fixTime ?? rawBody.serverTime;
     const recordedAt = typeof deviceTime === 'string' ? deviceTime : new Date().toISOString();
 
     const { data: loc, error: insertError } = await supabase
@@ -91,6 +103,8 @@ serve(async (req) => {
         longitude: lng,
         speed: speedKmh,
         heading: heading,
+        odometer_km: odometerKm != null && !isNaN(odometerKm) ? odometerKm : null,
+        geofence_name: geofenceName && String(geofenceName).trim() ? String(geofenceName).trim() : null,
         recorded_at: recordedAt,
       })
       .select('id')

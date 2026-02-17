@@ -42,7 +42,6 @@ const DriverTripsPage = lazy(() => import("./pages/driver/DriverTripsPage"));
 const DriverTripDetailPage = lazy(() => import("./pages/driver/DriverTripDetailPage"));
 const DriverPassengersPage = lazy(() => import("./pages/driver/DriverPassengersPage"));
 const DriverIncidentsPage = lazy(() => import("./pages/driver/DriverIncidentsPage"));
-const DriverAppPage = lazy(() => import("./pages/driver/DriverAppPage"));
 
 const queryClient = new QueryClient();
 
@@ -274,14 +273,6 @@ const App = () => (
                 </ProtectedRoute>
               } />
               
-              {/* Driver App - Now inside DashboardLayout for consistent sidebar */}
-              <Route path="/driver-app" element={
-                <ProtectedRoute allowedRoles={['admin', 'driver']}>
-                  <Suspense fallback={<PageLoader />}>
-                    <DriverAppPage />
-                  </Suspense>
-                </ProtectedRoute>
-              } />
             </Route>
 
             <Route path="*" element={<NotFound />} />

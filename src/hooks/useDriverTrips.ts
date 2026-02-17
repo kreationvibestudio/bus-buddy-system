@@ -149,6 +149,8 @@ export function useStartTrip() {
       queryClient.invalidateQueries({ queryKey: ['driver-trips'] });
       queryClient.invalidateQueries({ queryKey: ['driver-upcoming-trips'] });
       queryClient.invalidateQueries({ queryKey: ['trip-detail', tripId] });
+      queryClient.invalidateQueries({ queryKey: ['trips'] });
+      queryClient.invalidateQueries({ queryKey: ['trips-for-date'] });
       toast.success('Trip started successfully');
     },
     onError: (error) => {
