@@ -231,16 +231,6 @@ export default function MyBookingsPage() {
         </TabsList>
 
         <TabsContent value={activeTab} className="mt-4">
-          {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="all">All</TabsTrigger>
-          <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-          <TabsTrigger value="completed">Completed</TabsTrigger>
-          <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value={activeTab} className="mt-4">
           {/* Bookings List */}
           {filteredBookings.length === 0 ? (
         <Card>
