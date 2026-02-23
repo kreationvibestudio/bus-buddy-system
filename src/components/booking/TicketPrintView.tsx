@@ -125,19 +125,7 @@ function escapeHtml(s: string): string {
 export function TicketPrintView({ booking, passengerName, passengerPhone, onClose }: TicketPrintViewProps) {
   const handlePrint = () => {
     const doc = buildTicketPrintDocument({ booking, passengerName, passengerPhone, onClose });
-    const win = window.open('', '_blank', 'noopener,noreferrer');
-    if (win) {
-      win.document.write(doc);
-      win.document.close();
-      win.focus();
-      win.onload = () => {
-        win.print();
-        win.afterprint = () => win.close();
-        setTimeout(() => win.close(), 500);
-      };
-      return;
-    }
-    // Popup blocked: print from a hidden iframe so we still get one receipt-sized page
+    // Print from a hidden iframe so only the ticket is printed (one page, POS width), no new tab/window
     const iframe = document.createElement('iframe');
     iframe.setAttribute('style', 'position:absolute;width:0;height:0;border:0;');
     document.body.appendChild(iframe);
