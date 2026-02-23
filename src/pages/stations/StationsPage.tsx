@@ -348,6 +348,25 @@ const StationsPage = () => {
     }
   }, [mapLoaded]);
 
+  const fitMapToAllStations = useCallback(() => {
+    if (!map.current || !mapLoaded) return;
+    const withCoords = filteredStations
+      .map((s) => getStationCoords(s))
+      .filter((c): c is { lat: number; lng: number; isFallback: boolean } => !!c);
+    if (withCoords.length === 0) return;
+    if (withCoords.length === 1) {
+      map.current.flyTo({
+        center: [withCoords[0].lng, withCoords[0].lat],
+        zoom: 10,
+        duration: 1500,
+      });
+    } else {
+      const bounds = new mapboxgl.LngLatBounds();
+      withCoords.forEach((c) => bounds.extend([c.lng, c.lat]));
+      map.current.fitBounds(bounds, { padding: 50, maxZoom: 10, duration: 1500 });
+    }
+  }, [filteredStations, getStationCoords, mapLoaded]);
+
   // Keep the ref updated with the latest flyToStation function
   useEffect(() => {
     flyToStationRef.current = flyToStation;
@@ -581,7 +600,13 @@ const StationsPage = () => {
                 )}
 
                 <div className="flex gap-2 pt-4">
-                  <Button variant="outline" onClick={() => setSelectedStation(null)}>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSelectedStation(null);
+                      fitMapToAllStations();
+                    }}
+                  >
                     Back to List
                   </Button>
                   {isAdmin && (
