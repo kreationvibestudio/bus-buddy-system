@@ -29,9 +29,135 @@ interface TicketPrintViewProps {
   onClose?: () => void;
 }
 
+/** Build plain HTML for ticket so we can print in a dedicated window (one page, POS width, no app chrome). */
+function buildTicketPrintDocument(props: TicketPrintViewProps): string {
+  const { booking, passengerName, passengerPhone } = props;
+  const route = booking.trip?.route;
+  const origin = route?.origin ?? 'Origin';
+  const destination = route?.destination ?? 'Destination';
+  const routeName = route?.name ?? '';
+  const tripDate = booking.trip?.trip_date ? format(new Date(booking.trip.trip_date), 'EEE, MMM d, yyyy') : '';
+  const depTime = booking.trip?.departure_time ?? '';
+  const busReg = booking.trip?.bus?.registration_number ?? '';
+  const bookedAt = format(new Date(booking.booked_at), 'MMM d, yyyy HH:mm');
+  const totalFare = formatCurrency(booking.total_fare);
+  const seats = booking.seat_numbers?.join(', ') ?? '';
+  const passengerBlock =
+    passengerName || passengerPhone
+      ? `
+    <div class="block">
+      <div class="label">Passenger Details</div>
+      ${passengerName ? `<div>Name: ${escapeHtml(passengerName)}</div>` : ''}
+      ${passengerPhone ? `<div>Phone: ${escapeHtml(passengerPhone)}</div>` : ''}
+    </div>`
+      : '';
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Ticket ${escapeHtml(booking.booking_number)}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 8px; font-family: system-ui, sans-serif; font-size: 12px; color: #111; }
+    .ticket { max-width: 80mm; margin: 0 auto; }
+    .center { text-align: center; }
+    .bold { font-weight: 700; }
+    .mt { margin-top: 6px; }
+    .mt2 { margin-top: 10px; }
+    .pt { padding-top: 8px; border-top: 2px solid #2563eb; }
+    .label { font-size: 10px; color: #666; margin-bottom: 2px; }
+    h1 { font-size: 18px; margin: 0 0 2px 0; }
+    .sub { font-size: 10px; color: #666; }
+    .booking-no { font-size: 16px; letter-spacing: 0.05em; }
+    .row { display: flex; justify-content: space-between; gap: 8px; }
+    @page { size: 80mm auto; margin: 4mm; }
+    @media print { body { padding: 0; } .ticket { max-width: none; width: 80mm; } }
+  </style>
+</head>
+<body>
+  <div class="ticket">
+    <div class="center">
+      <h1>FleetMaster Bus</h1>
+      <p class="sub">EagleLine Transportation</p>
+    </div>
+    <div class="center pt mt">
+      <div class="label">BOOKING CONFIRMATION</div>
+      <div class="booking-no bold">${escapeHtml(booking.booking_number)}</div>
+    </div>
+    ${passengerBlock}
+    <div class="block mt2">
+      <div class="label">Route</div>
+      <div class="bold">${escapeHtml(origin)} → ${escapeHtml(destination)}</div>
+      ${routeName ? `<div class="sub">${escapeHtml(routeName)}</div>` : ''}
+    </div>
+    <div class="row mt">
+      <div><div class="label">Date</div><div>${escapeHtml(tripDate)}</div></div>
+      <div><div class="label">Departure Time</div><div>${escapeHtml(depTime)}</div></div>
+    </div>
+    ${busReg ? `<div class="mt"><div class="label">Bus</div><div>${escapeHtml(busReg)}</div></div>` : ''}
+    <div class="row mt">
+      <div><div class="label">Seat${booking.seat_numbers?.length > 1 ? 's' : ''}</div><div>${escapeHtml(seats)}</div></div>
+      <div><div class="label">Passenger${booking.passenger_count > 1 ? 's' : ''}</div><div>${booking.passenger_count}</div></div>
+    </div>
+    <div class="pt mt row">
+      <span class="label">Total Fare</span>
+      <span class="bold">${escapeHtml(totalFare)}</span>
+    </div>
+    <div class="center mt2 sub">
+      <p>Booked on ${escapeHtml(bookedAt)}</p>
+      <p>Please arrive at the terminal 15 minutes before departure</p>
+      <p>Present this ticket at boarding</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export function TicketPrintView({ booking, passengerName, passengerPhone, onClose }: TicketPrintViewProps) {
   const handlePrint = () => {
-    window.print();
+    const doc = buildTicketPrintDocument({ booking, passengerName, passengerPhone, onClose });
+    const win = window.open('', '_blank', 'noopener,noreferrer');
+    if (win) {
+      win.document.write(doc);
+      win.document.close();
+      win.focus();
+      win.onload = () => {
+        win.print();
+        win.afterprint = () => win.close();
+        setTimeout(() => win.close(), 500);
+      };
+      return;
+    }
+    // Popup blocked: print from a hidden iframe so we still get one receipt-sized page
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('style', 'position:absolute;width:0;height:0;border:0;');
+    document.body.appendChild(iframe);
+    const iframeWin = iframe.contentWindow;
+    const iframeDoc = iframeWin?.document;
+    if (iframeDoc && iframeWin) {
+      iframeDoc.open();
+      iframeDoc.write(doc);
+      iframeDoc.close();
+      const cleanup = () => {
+        try { document.body.removeChild(iframe); } catch { /* already removed */ }
+      };
+      iframeWin.onload = () => {
+        iframeWin.print();
+        iframeWin.onafterprint = cleanup;
+        setTimeout(cleanup, 3000);
+      };
+    } else {
+      document.body.removeChild(iframe);
+    }
   };
 
   return (
@@ -135,32 +261,6 @@ export function TicketPrintView({ booking, passengerName, passengerPhone, onClos
           <p className="mt-1">Present this ticket at boarding</p>
         </div>
       </div>
-
-      {/* Print styles */}
-      <style>{`
-        @media print {
-          @page {
-            margin: 0.5cm;
-            size: A4;
-          }
-          body * {
-            visibility: hidden;
-          }
-          .ticket-print-content,
-          .ticket-print-content * {
-            visibility: visible;
-          }
-          .ticket-print-content {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-          }
-          .print\\:hidden {
-            display: none !important;
-          }
-        }
-      `}</style>
     </div>
   );
 }
