@@ -17,7 +17,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.ico", "pwa-192x192.png"],
+      includeAssets: ["favicon.ico", "favicon.png", "pwa-192x192.png"],
       manifest: {
         name: "EagleLine Fleet Management",
         short_name: "EagleLine",
@@ -30,7 +30,7 @@ export default defineConfig({
         start_url: "/",
         icons: [
           {
-            src: "/pwa-192x192.png",
+            src: "/favicon.png",
             sizes: "192x192",
             type: "image/png",
             purpose: "any maskable",

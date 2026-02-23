@@ -67,14 +67,7 @@ export default function BookingsPage() {
     await cancelBooking.mutateAsync({ id, reason: 'Cancelled by admin', isAdmin: true });
   };
 
-  if (isLoading) {
-    return <div className="p-6">Loading bookings...</div>;
-  }
-
-  const totalRevenue = bookings?.reduce((sum, b) => sum + (b.status !== 'cancelled' ? b.total_fare : 0), 0) || 0;
-  const totalPassengers = bookings?.reduce((sum, b) => sum + (b.status !== 'cancelled' ? b.passenger_count : 0), 0) || 0;
-
-  // Get manifest data for selected trip
+  // Get manifest data for selected trip (must run before any early return to satisfy rules of hooks)
   const { data: manifestData } = useQuery({
     queryKey: ['trip-manifest', selectedTripForManifest],
     queryFn: async () => {
@@ -147,6 +140,13 @@ export default function BookingsPage() {
     const dateB = new Date(`${b.trip_date}T${b.departure_time}`);
     return dateA.getTime() - dateB.getTime();
   }) || [];
+
+  const totalRevenue = bookings?.reduce((sum, b) => sum + (b.status !== 'cancelled' ? b.total_fare : 0), 0) || 0;
+  const totalPassengers = bookings?.reduce((sum, b) => sum + (b.status !== 'cancelled' ? b.passenger_count : 0), 0) || 0;
+
+  if (isLoading) {
+    return <div className="p-6">Loading bookings...</div>;
+  }
 
   return (
     <div className="p-6 space-y-6">
