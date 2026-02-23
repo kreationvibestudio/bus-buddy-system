@@ -16,6 +16,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import { getCityCoords } from '@/lib/cityCoords';
 
 interface StationFormData {
   name: string;
@@ -64,6 +65,17 @@ const StationsPage = () => {
   const skipFitBoundsRef = useRef(false);
   const lastFilterKeyRef = useRef<string>('');
 
+  const getStationCoords = useCallback((station: any): { lat: number; lng: number; isFallback: boolean } | null => {
+    const lat = Number(station?.latitude);
+    const lng = Number(station?.longitude);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng, isFallback: false };
+
+    // Fallback to city coordinates (approximate) when GPS coords are missing
+    const fallback = getCityCoords(station?.city ?? station?.state?.name);
+    if (!Number.isFinite(fallback.lat) || !Number.isFinite(fallback.lng)) return null;
+    return { lat: fallback.lat, lng: fallback.lng, isFallback: true };
+  }, []);
+
   // Filter stations by state - memoized to prevent unnecessary re-renders
   const filteredStations = useMemo(() => {
     return stations?.filter(s => 
@@ -79,21 +91,23 @@ const StationsPage = () => {
         setSelectedStation(null);
         
         // Fly to the filtered stations area
-        const stationsWithCoords = filteredStations.filter(s => s.latitude && s.longitude);
+        const stationsWithCoords = filteredStations
+          .map((s) => ({ station: s, coords: getStationCoords(s) }))
+          .filter((x) => !!x.coords) as { station: any; coords: { lat: number; lng: number; isFallback: boolean } }[];
         if (stationsWithCoords.length > 0 && map.current) {
           if (stationsWithCoords.length === 1) {
             // Single station - fly directly to it
             const station = stationsWithCoords[0];
             map.current.flyTo({
-              center: [station.longitude!, station.latitude!],
+              center: [station.coords.lng, station.coords.lat],
               zoom: 10,
               duration: 1500,
             });
           } else {
             // Multiple stations - fit bounds
             const bounds = new mapboxgl.LngLatBounds();
-            stationsWithCoords.forEach(s => {
-              bounds.extend([s.longitude!, s.latitude!]);
+            stationsWithCoords.forEach(({ coords }) => {
+              bounds.extend([coords.lng, coords.lat]);
             });
             map.current.fitBounds(bounds, { padding: 50, maxZoom: 10, duration: 1500 });
           }
@@ -153,13 +167,14 @@ const StationsPage = () => {
 
     // Add markers for filtered stations
     filteredStations.forEach((station) => {
-      if (station.latitude && station.longitude) {
+      const coords = getStationCoords(station);
+      if (coords) {
         const el = document.createElement('div');
         el.className = 'station-marker';
         el.style.cssText = `
           width: 32px;
           height: 32px;
-          background: hsl(var(--primary));
+          background: ${coords.isFallback ? 'hsl(var(--muted-foreground))' : 'hsl(var(--primary))'};
           border-radius: 50%;
           border: 3px solid white;
           box-shadow: 0 2px 8px rgba(0,0,0,0.3);
@@ -199,11 +214,17 @@ const StationsPage = () => {
           addressInfo.textContent = station.address;
           popupContent.appendChild(addressInfo);
         }
+        if (coords.isFallback) {
+          const approx = document.createElement('p');
+          approx.style.cssText = 'margin: 6px 0 0; font-size: 11px; color: #888;';
+          approx.textContent = 'Approximate location (city center)';
+          popupContent.appendChild(approx);
+        }
 
         const popup = new mapboxgl.Popup({ offset: 25 }).setDOMContent(popupContent);
 
         const marker = new mapboxgl.Marker(el)
-          .setLngLat([station.longitude, station.latitude])
+          .setLngLat([coords.lng, coords.lat])
           .setPopup(popup)
           .addTo(map.current!);
 
@@ -233,15 +254,17 @@ const StationsPage = () => {
     }
 
     // Fit bounds only when filter changes or initial load
-    const stationsWithCoords = filteredStations.filter(s => s.latitude && s.longitude);
+    const stationsWithCoords = filteredStations
+      .map((s) => ({ station: s, coords: getStationCoords(s) }))
+      .filter((x) => !!x.coords) as { station: any; coords: { lat: number; lng: number; isFallback: boolean } }[];
     if (shouldFitBounds && stationsWithCoords.length > 0 && map.current && filterChanged) {
       const bounds = new mapboxgl.LngLatBounds();
-      stationsWithCoords.forEach(s => {
-        bounds.extend([s.longitude!, s.latitude!]);
+      stationsWithCoords.forEach(({ coords }) => {
+        bounds.extend([coords.lng, coords.lat]);
       });
       map.current.fitBounds(bounds, { padding: 50, maxZoom: 10 });
     }
-  }, [filteredStations, selectedState, mapLoaded]);
+  }, [filteredStations, selectedState, mapLoaded, getStationCoords]);
 
   const handleOpenDialog = (station?: any) => {
     if (station) {
