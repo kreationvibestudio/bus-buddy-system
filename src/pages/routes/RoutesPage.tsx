@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useRoutes, useCreateRoute, useUpdateRoute, useStations, useCreateStation } from '@/hooks/useRoutes';
+import { useAllRoutes, useCreateRoute, useUpdateRoute, useStations, useCreateStation, useRegenerateUpcomingTrips } from '@/hooks/useRoutes';
 import { formatCurrency } from '@/lib/currency';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,14 +10,15 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Route, MapPin, Search, Edit, Clock, DollarSign } from 'lucide-react';
+import { Plus, Route, MapPin, Search, Edit, Clock, DollarSign, RefreshCw } from 'lucide-react';
 
 export default function RoutesPage() {
-  const { data: routes, isLoading: routesLoading } = useRoutes();
+  const { data: routes, isLoading: routesLoading } = useAllRoutes();
   const { data: stations, isLoading: stationsLoading } = useStations();
   const createRoute = useCreateRoute();
   const updateRoute = useUpdateRoute();
   const createStation = useCreateStation();
+  const regenerateTrips = useRegenerateUpcomingTrips();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [isRouteDialogOpen, setIsRouteDialogOpen] = useState(false);
@@ -32,6 +33,7 @@ export default function RoutesPage() {
     distance_km: 0,
     estimated_duration_minutes: 0,
     is_active: true,
+    daily_bus_count: 3,
   });
 
   const [stationForm, setStationForm] = useState({
@@ -85,6 +87,7 @@ export default function RoutesPage() {
       distance_km: 0,
       estimated_duration_minutes: 0,
       is_active: true,
+      daily_bus_count: 3,
     });
     setEditingRoute(null);
   };
@@ -111,6 +114,7 @@ export default function RoutesPage() {
       distance_km: route.distance_km || 0,
       estimated_duration_minutes: route.estimated_duration_minutes || 0,
       is_active: route.is_active ?? true,
+      daily_bus_count: route.daily_bus_count ?? 3,
     });
     setIsRouteDialogOpen(true);
   };
@@ -185,7 +189,7 @@ export default function RoutesPage() {
                   <CardTitle>All Routes</CardTitle>
                   <CardDescription>Manage your bus routes</CardDescription>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2 items-center">
                   <div className="relative w-64">
                     <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -195,6 +199,15 @@ export default function RoutesPage() {
                       className="pl-8"
                     />
                   </div>
+                  <Button
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => regenerateTrips.mutate()}
+                    disabled={regenerateTrips.isPending}
+                  >
+                    <RefreshCw className={regenerateTrips.isPending ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
+                    Regenerate upcoming trips
+                  </Button>
                   <Dialog open={isRouteDialogOpen} onOpenChange={(open) => { setIsRouteDialogOpen(open); if (!open) resetRouteForm(); }}>
                     <DialogTrigger asChild>
                       <Button className="gap-2">
@@ -271,6 +284,18 @@ export default function RoutesPage() {
                             />
                           </div>
                         </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="daily_bus_count">Buses per day</Label>
+                          <Input
+                            id="daily_bus_count"
+                            type="number"
+                            min={1}
+                            max={12}
+                            value={routeForm.daily_bus_count}
+                            onChange={(e) => setRouteForm({ ...routeForm, daily_bus_count: Math.max(1, Math.min(12, parseInt(e.target.value) || 1)) })}
+                          />
+                          <p className="text-xs text-muted-foreground">Number of departures per day on this route. Click &quot;Regenerate upcoming trips&quot; after saving to apply.</p>
+                        </div>
                         <div className="flex items-center space-x-2">
                           <Switch
                             id="is_active"
@@ -303,6 +328,7 @@ export default function RoutesPage() {
                     <TableHead>Distance</TableHead>
                     <TableHead>Duration</TableHead>
                     <TableHead>Base Fare</TableHead>
+                    <TableHead>Buses/day</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -316,6 +342,7 @@ export default function RoutesPage() {
                       <TableCell>{route.distance_km} km</TableCell>
                       <TableCell>{route.estimated_duration_minutes} min</TableCell>
                       <TableCell>{formatCurrency(route.base_fare)}</TableCell>
+                      <TableCell>{route.daily_bus_count ?? 3}</TableCell>
                       <TableCell>
                         <Badge variant={route.is_active ? 'default' : 'secondary'}>
                           {route.is_active ? 'Active' : 'Inactive'}

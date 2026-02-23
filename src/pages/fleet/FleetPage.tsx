@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Bus, Search, Edit, Wrench } from 'lucide-react';
+import { Plus, Bus, Search, Edit, Wrench, MapPin, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function FleetPage() {
@@ -237,6 +237,26 @@ export default function FleetPage() {
         </Dialog>
       </div>
 
+      {/* Buses without GPS setup */}
+      {buses?.some(b => !b.traccar_device_id) && (
+        <Card className="border-amber-500/50 bg-amber-500/5">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-amber-800 dark:text-amber-200">
+                  Buses without GPS tracking
+                </p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {buses.filter(b => !b.traccar_device_id).map(b => b.registration_number).join(', ')} — no Traccar Device ID set.
+                  Edit each bus and set the Traccar Device ID (from Traccar → Devices) to enable Live Tracking.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
@@ -320,7 +340,16 @@ export default function FleetPage() {
                   <TableCell>{bus.capacity} seats</TableCell>
                   <TableCell className="capitalize">{bus.fuel_type}</TableCell>
                   <TableCell>{bus.mileage?.toLocaleString()} km</TableCell>
-                  <TableCell>{bus.traccar_device_id ?? '-'}</TableCell>
+                  <TableCell>
+                    {bus.traccar_device_id != null ? (
+                      <span className="text-success">{bus.traccar_device_id}</span>
+                    ) : (
+                      <span className="text-amber-600 dark:text-amber-500 flex items-center gap-1">
+                        <MapPin className="h-3 w-3" />
+                        Not set
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell>{getStatusBadge(bus.status)}</TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="icon" onClick={() => openEditDialog(bus)}>

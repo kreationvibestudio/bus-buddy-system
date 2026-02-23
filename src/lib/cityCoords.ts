@@ -39,6 +39,7 @@ export const CITY_COORDS: Record<string, { lat: number; lng: number }> = {
   'Sokoto': { lat: 13.0059, lng: 5.2476 },
   'Umuahia': { lat: 5.5249, lng: 7.4946 },
   'Uyo': { lat: 5.0513, lng: 7.9335 },
+  'Warri': { lat: 5.5167, lng: 5.7500 },
   'Yenagoa': { lat: 4.9261, lng: 6.2642 },
   'Yola': { lat: 9.2035, lng: 12.4954 },
 };

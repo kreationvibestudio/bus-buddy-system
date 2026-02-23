@@ -95,6 +95,7 @@ export interface Route {
   estimated_duration_minutes?: number;
   base_fare: number;
   is_active?: boolean;
+  daily_bus_count?: number;
   created_at: string;
   updated_at: string;
 }
@@ -166,6 +167,7 @@ export interface Trip {
   actual_arrival_time?: string;
   status?: string;
   available_seats?: number;
+  fare?: number;
   notes?: string;
   created_at: string;
   updated_at: string;

@@ -38,4 +38,6 @@ If buses show in the wrong city (e.g. Lagos instead of Benin City):
 
 - [ ] Add `VITE_MAPBOX_TOKEN` to Vercel Environment Variables (required for maps)
 - [ ] Map each bus to its Traccar Device ID in Fleet Management
-- [ ] Configure Traccar `forward.url` and `forward.header` (see README)
+- [ ] Configure Traccar `forward.url` and `forward.header` (see README or TRACCAR_SUPABASE_SETUP.md)
+
+For full app features (booking, routes, schedules, roles), see **README.md** and **PLATFORM_WORKBOOK.md**.

@@ -1,17 +1,19 @@
-# EagleLine Fleet Management System
+# FleetMaster Bus Management System
 
-A comprehensive bus fleet management system with booking, tracking, maintenance, and multi-role access control.
+A comprehensive bus fleet management system with passenger booking, live tracking, maintenance, and multi-role access control. Also referred to as EagleLine in some deployments.
 
 > Built with [Cursor](https://cursor.sh/) - The AI-powered code editor
 
 ## Features
 
-- **Fleet Management**: Bus tracking, maintenance, and inventory management
-- **Booking System**: Ticket booking and passenger management
+- **Fleet Management**: Bus tracking, Traccar GPS mapping, maintenance, and inventory management
+- **Passenger Booking**: Route/date search, seat picker, one-way and round-trip, pay-at-terminal or online
+- **My Bookings**: View all bookings (pending/confirmed/paid), upcoming trips filter, booking details dialog
 - **Driver Management**: Driver profiles, trips, incidents, and GPS tracking
-- **Route & Schedule Management**: Bus routes and scheduling
+- **Routes & Schedules**: Routes with base fare and optional **daily bus count**; admin can set **trip fare** per trip; regenerate upcoming trips
 - **Multi-role Access**: Admin, Staff, Driver, Mechanic, Passenger, Accounts, Storekeeper roles
-- **Real-time Tracking**: GPS-based bus location tracking with Mapbox
+- **Real-time Tracking**: GPS via Traccar webhook; Live Tracking map (admin/staff/passenger)
+- **Stations**: Admin-only station management
 - **Mobile Support**: Capacitor-based mobile app support
 - **PWA**: Progressive Web App support for offline functionality
 
@@ -199,16 +201,14 @@ supabase/
 
 - `/` - Landing page
 - `/auth` - Login
-- `/dashboard` - Main dashboard
-- `/fleet` - Fleet management (admin)
-- `/drivers` - Driver management (admin)
-- `/routes` - Route management
-- `/schedules` - Schedule management
-- `/bookings` - Booking management
-- `/tracking` - Real-time tracking
-- `/maintenance` - Maintenance records
-- `/inventory` - Inventory management
-- `/driver-app` - Driver mobile interface
+- `/dashboard` - Main dashboard (role-based)
+- `/profile` - Redirects to Settings (profile info)
+- `/settings` - Profile and app settings
+- **Passenger:** `/book` - Book a ticket; `/my-bookings` - My bookings (supports `?filter=upcoming`)
+- **Admin:** `/fleet`, `/drivers`, `/stations` (admin only), `/users`, `/admin/system-status`
+- **Admin/Staff:** `/routes` (daily bus count, regenerate trips), `/schedules` (trip fare), `/bookings`, `/tracking`
+- **Driver:** `/driver/trips`, `/driver/passengers`, `/driver/incidents`
+- `/maintenance`, `/inventory`, `/accounts`, `/customer-service`, `/reports`
 
 ## Environment Variables
 
@@ -272,19 +272,29 @@ To use Traccar (hosted on another server) for hardware GPS tracking:
 
 2. **Deploy the webhook function**:
    ```bash
-   supabase functions deploy traccar-webhook
+   npm run deploy:webhook
+   # Or: npx supabase functions deploy traccar-webhook --project-ref ccvjtchhcjzpiefrgbmk
    ```
 
 3. **Map buses to Traccar devices** in Fleet Management: Edit each bus and set its Traccar Device ID (from your Traccar server).
 
 4. **Configure Traccar** (`traccar.xml`):
    ```xml
-   <entry key='forward.url'>https://YOUR_PROJECT_REF.supabase.co/functions/v1/traccar-webhook</entry>
+   <entry key='forward.enable'>true</entry>
+   <entry key='forward.url'>https://ccvjtchhcjzpiefrgbmk.supabase.co/functions/v1/traccar-webhook</entry>
    <entry key='forward.type'>json</entry>
-   <entry key='forward.header'>Authorization: Bearer YOUR_SUPABASE_SERVICE_ROLE_KEY</entry>
+   <entry key='forward.header'>Authorization: Bearer YOUR_TRACCAR_WEBHOOK_SECRET</entry>
    ```
+   Use `TRACCAR_WEBHOOK_SECRET` (set in Supabase Edge Function secrets) instead of service_role key to avoid XML escaping issues.
 
-5. Restart Traccar. Positions will flow into the Live Tracking map automatically.
+5. **(Optional) Expose Traccar publicly** for System Status checks:
+   - Use **Cloudflare Tunnel** (recommended) or **Tailscale Funnel** to expose Traccar at a public URL
+   - Set `TRACCAR_SERVER_URL` in Supabase Edge Function secrets to the public URL
+   - See `TRACCAR_SUPABASE_SETUP.md` for detailed instructions
+
+6. Restart Traccar. Positions will flow into the Live Tracking map automatically.
+
+**Full setup guide:** See `TRACCAR_SUPABASE_SETUP.md` for complete instructions, troubleshooting, and Cloudflare Tunnel setup.
 
 ## Troubleshooting
 
@@ -313,6 +323,28 @@ To use Traccar (hosted on another server) for hardware GPS tracking:
 - Check that `pwa-192x192.png` exists in the `public/` directory
 - The PWA plugin is enabled by default for production builds
 
+## Visual Documentation
+
+- **[Flow Diagrams](./FLOW_DIAGRAMS.md)** - Visual flowcharts for booking, GPS tracking, payment, and system architecture
+- **[Screenshots Guide](./SCREENSHOTS_GUIDE.md)** - Structure and checklist for capturing page screenshots
+
+## Platform Workbook (Admin Guide)
+
+For a complete, step-by-step guide to running and administering the platform (written in simple language), see **[PLATFORM_WORKBOOK.md](./PLATFORM_WORKBOOK.md)**.
+
+## Screenshots
+
+> **Note:** Screenshots are organized in the `screenshots/` folder. See [SCREENSHOTS_GUIDE.md](./SCREENSHOTS_GUIDE.md) for the complete checklist and structure.
+
+### Key Pages
+
+<!-- Add screenshots here once captured -->
+<!-- Example:
+![Passenger Dashboard](./screenshots/passenger/dashboard.png)
+![Admin Routes](./screenshots/admin/routes.png)
+![Booking Flow](./screenshots/passenger/book-ticket-seats.png)
+-->
+
 ## Additional Resources
 
 - [Vite Documentation](https://vitejs.dev/)
@@ -321,7 +353,14 @@ To use Traccar (hosted on another server) for hardware GPS tracking:
 - [Capacitor Documentation](https://capacitorjs.com/docs)
 - [shadcn/ui Documentation](https://ui.shadcn.com/)
 
+## Documentation Files
+
+- **[PLATFORM_WORKBOOK.md](./PLATFORM_WORKBOOK.md)** - Complete admin guide (SOP)
+- **[FLOW_DIAGRAMS.md](./FLOW_DIAGRAMS.md)** - Visual flowcharts for key processes
+- **[SCREENSHOTS_GUIDE.md](./SCREENSHOTS_GUIDE.md)** - Screenshot checklist and structure
+- **[TRACCAR_SUPABASE_SETUP.md](./TRACCAR_SUPABASE_SETUP.md)** - Traccar GPS integration guide
+- **[TRACKING_SETUP.md](./TRACKING_SETUP.md)** - Live tracking setup
+
 ## License
 
 [Add your license here]
-# Test

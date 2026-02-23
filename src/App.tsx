@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { DashboardLayout } from "./components/layout/DashboardLayout";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
@@ -38,6 +38,7 @@ const ShareTrackPage = lazy(() => import("./pages/tracking/ShareTrackPage"));
 const StationsPage = lazy(() => import("./pages/stations/StationsPage"));
 const JobCardsPage = lazy(() => import("./pages/mechanic/JobCardsPage"));
 const UserManagementPage = lazy(() => import("./pages/admin/UserManagementPage"));
+const SystemStatusPage = lazy(() => import("./pages/admin/SystemStatusPage"));
 const DriverTripsPage = lazy(() => import("./pages/driver/DriverTripsPage"));
 const DriverTripDetailPage = lazy(() => import("./pages/driver/DriverTripDetailPage"));
 const DriverPassengersPage = lazy(() => import("./pages/driver/DriverPassengersPage"));
@@ -81,6 +82,7 @@ const App = () => (
             <Route element={<DashboardLayout />}>
               {/* Dashboard - accessible by all authenticated users */}
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/profile" element={<Navigate to="/settings" replace />} />
               <Route path="/settings" element={
                 <Suspense fallback={<PageLoader />}>
                   <SettingsPage />
@@ -119,7 +121,7 @@ const App = () => (
                 </ProtectedRoute>
               } />
               <Route path="/stations" element={
-                <ProtectedRoute allowedRoles={['admin', 'staff', 'passenger']}>
+                <ProtectedRoute allowedRoles={['admin']}>
                   <Suspense fallback={<PageLoader />}>
                     <StationsPage />
                   </Suspense>
@@ -223,6 +225,14 @@ const App = () => (
                 <ProtectedRoute allowedRoles={['admin']}>
                   <Suspense fallback={<PageLoader />}>
                     <ReportsPage />
+                  </Suspense>
+                </ProtectedRoute>
+              } />
+              {/* System Status - Admin only */}
+              <Route path="/admin/system-status" element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <Suspense fallback={<PageLoader />}>
+                    <SystemStatusPage />
                   </Suspense>
                 </ProtectedRoute>
               } />

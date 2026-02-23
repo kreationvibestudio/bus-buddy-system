@@ -32,6 +32,7 @@ interface BusLocation {
   id: string;
   registration_number: string;
   model: string;
+  traccarDeviceId?: number | null;
   lat: number;
   lng: number;
   speed: number;
@@ -178,6 +179,7 @@ export default function TrackingPage() {
         id: bus.id,
         registration_number: bus.registration_number,
         model: bus.model,
+        traccarDeviceId: bus.traccar_device_id ?? null,
         lat: Number(loc.latitude),
         lng: Number(loc.longitude),
         speed: loc.speed == null ? 0 : Number(loc.speed),
@@ -209,6 +211,7 @@ export default function TrackingPage() {
           id: bus.id,
           registration_number: bus.registration_number,
           model: bus.model || '—',
+          traccarDeviceId: bus.traccar_device_id ?? null,
           lat: coords.lat,
           lng: coords.lng,
           speed: 0,
@@ -408,8 +411,13 @@ export default function TrackingPage() {
                         {formatDistanceToNow(new Date(bus.lastUpdate), { addSuffix: true })}
                       </span>
                     ) : bus.awaitingGps && (
-                      <span className="flex items-center gap-1 text-amber-600 dark:text-amber-500">
-                        Traccar device must be sending data for live tracking
+                      <span className="flex flex-col gap-1 text-amber-600 dark:text-amber-500">
+                        <span>Traccar device must be sending data for live tracking</span>
+                        <span className="text-xs">
+                          {bus.traccarDeviceId != null
+                            ? `Traccar Device ID: ${bus.traccarDeviceId} — set in Fleet Management. Check Traccar & forward.url.`
+                            : 'Traccar Device ID not set — edit bus in Fleet Management.'}
+                        </span>
                       </span>
                     )}
                   </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -8,8 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { format, parseISO } from 'date-fns';
-import { CalendarIcon, Search, Bus, Clock, MapPin, Users, CreditCard, ArrowLeftRight, CheckCircle } from 'lucide-react';
+import { format, parseISO, addDays, startOfWeek, addWeeks } from 'date-fns';
+import { CalendarIcon, Search, Bus, Clock, MapPin, Users, CreditCard, ArrowLeftRight, CheckCircle, Sofa, History } from 'lucide-react';
 import { useRoutes } from '@/hooks/useRoutes';
 import { useTrips } from '@/hooks/useSchedules';
 import { useCreateRoundTripBooking } from '@/hooks/useBookings';
@@ -18,48 +18,110 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/currency';
+import { SeatPicker } from '@/components/booking/SeatPicker';
+import { useQuery } from '@tanstack/react-query';
 
-type BookingStep = 'search' | 'select-outbound' | 'select-return' | 'confirm';
+type BookingStep = 'search' | 'select-outbound' | 'select-return' | 'select-seats' | 'confirm';
 type TripType = 'one-way' | 'round-trip';
 
 export default function BookTicketPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { data: routes } = useRoutes();
   const { data: trips } = useTrips();
   const createBooking = useCreateRoundTripBooking();
-  
-  // Parse URL params
+
+  // Get recent routes from user's bookings
+  const { data: recentRoutes } = useQuery({
+    queryKey: ['recent-routes', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      const { data, error } = await supabase
+        .from('bookings')
+        .select(`
+          trip:trips(
+            route:routes(id, origin, destination, name)
+          )
+        `)
+        .eq('user_id', user.id)
+        .not('status', 'eq', 'cancelled')
+        .order('created_at', { ascending: false })
+        .limit(10);
+      
+      if (error) return [];
+      const uniqueRoutes = Array.from(
+        new Map(
+          (data || [])
+            .map((b: any) => b.trip?.route)
+            .filter((r: any) => r?.id)
+            .map((r: any) => [r.id, r])
+        ).values()
+      ).slice(0, 3);
+      return uniqueRoutes;
+    },
+    enabled: !!user?.id,
+  });
+
   const fromParam = searchParams.get('from');
   const toParam = searchParams.get('to');
   const dateParam = searchParams.get('date');
   const passengersParam = searchParams.get('passengers');
   const tripTypeParam = searchParams.get('tripType') as TripType | null;
   const returnDateParam = searchParams.get('returnDate');
+  const outboundTripIdParam = searchParams.get('outboundTripId');
+  const returnTripIdParam = searchParams.get('returnTripId');
+  const seatsParam = searchParams.get('seats');
+  const stepParam = searchParams.get('step') as BookingStep | null;
 
   const [tripType, setTripType] = useState<TripType>(tripTypeParam || 'one-way');
   const [selectedRouteId, setSelectedRouteId] = useState<string>('');
   const [searchDate, setSearchDate] = useState<Date | undefined>(dateParam ? parseISO(dateParam) : new Date());
   const [returnDate, setReturnDate] = useState<Date | undefined>(returnDateParam ? parseISO(returnDateParam) : undefined);
   const [passengerCount, setPassengerCount] = useState(passengersParam ? parseInt(passengersParam) : 1);
-  
+
   const [outboundResults, setOutboundResults] = useState<any[]>([]);
   const [returnResults, setReturnResults] = useState<any[]>([]);
   const [selectedOutboundTrip, setSelectedOutboundTrip] = useState<any>(null);
   const [selectedReturnTrip, setSelectedReturnTrip] = useState<any>(null);
+  const [selectedSeatNumbers, setSelectedSeatNumbers] = useState<number[]>([]);
   const [step, setStep] = useState<BookingStep>('search');
 
-  // Find matching route based on origin/destination from URL params
   useEffect(() => {
     if (routes && fromParam && toParam) {
       const matchingRoute = routes.find(
         (r: any) => r.origin === fromParam && r.destination === toParam
       );
-      if (matchingRoute) {
-        setSelectedRouteId(matchingRoute.id);
-      }
+      if (matchingRoute) setSelectedRouteId(matchingRoute.id);
     }
   }, [routes, fromParam, toParam]);
+
+  // Restore state from URL after guest login (redirect back to /book?step=confirm&outboundTripId=...)
+  useEffect(() => {
+    if (stepParam !== 'confirm' || !outboundTripIdParam) return;
+    (async () => {
+      const { data: outbound } = await supabase
+        .from('trips')
+        .select('*, route:routes(*), bus:buses(*)')
+        .eq('id', outboundTripIdParam)
+        .single();
+      if (outbound) setSelectedOutboundTrip(outbound);
+      if (returnTripIdParam) {
+        const { data: returnTrip } = await supabase
+          .from('trips')
+          .select('*, route:routes(*), bus:buses(*)')
+          .eq('id', returnTripIdParam)
+          .single();
+        if (returnTrip) setSelectedReturnTrip(returnTrip);
+      }
+      if (seatsParam) {
+        const seats = seatsParam.split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n));
+        if (seats.length) setSelectedSeatNumbers(seats);
+      }
+      setStep('confirm');
+      if (outbound?.route_id) setSelectedRouteId(outbound.route_id);
+    })();
+  }, [outboundTripIdParam, returnTripIdParam, seatsParam, stepParam]);
 
   // Get unique locations from routes
   const locations = routes ? [...new Set(routes.flatMap((r: any) => [r.origin, r.destination]))] : [];
@@ -98,62 +160,64 @@ export default function BookTicketPage() {
 
   const handleSelectOutbound = async (trip: any) => {
     setSelectedOutboundTrip(trip);
-    
+    setSelectedSeatNumbers([]);
     if (tripType === 'round-trip' && returnRoute && returnDate) {
       const returnDateStr = format(returnDate, 'yyyy-MM-dd');
-      
-      // Query return trips directly from database to avoid caching issues
       const { data: directReturnTrips, error } = await supabase
         .from('trips')
         .select('*, route:routes(*), bus:buses(*)')
         .eq('route_id', returnRoute.id)
         .eq('trip_date', returnDateStr)
         .eq('status', 'scheduled');
-      
       if (error) {
-        console.error('Error fetching return trips:', error);
         toast.error('Failed to fetch return trips');
         return;
       }
-      
-      console.log('Return route:', returnRoute);
-      console.log('Return date:', returnDateStr);
-      console.log('Return trips found:', directReturnTrips);
-      
       setReturnResults(directReturnTrips || []);
       setStep('select-return');
-      
-      if (!directReturnTrips || directReturnTrips.length === 0) {
-        toast.info('No return trips available. Please select a different return date.');
-      }
+      if (!directReturnTrips?.length) toast.info('No return trips available. Please select a different return date.');
     } else {
-      setStep('confirm');
+      setStep('select-seats');
     }
   };
 
   const handleSelectReturn = (trip: any) => {
     setSelectedReturnTrip(trip);
-    setStep('confirm');
+    setSelectedSeatNumbers([]);
+    setStep('select-seats');
   };
 
   const handleConfirmBooking = async () => {
-    if (!selectedOutboundTrip || !user) {
+    if (!selectedOutboundTrip) {
       toast.error('Please select a trip');
+      return;
+    }
+    if (selectedSeatNumbers.length !== passengerCount) {
+      toast.error(`Please select ${passengerCount} seat${passengerCount > 1 ? 's' : ''}`);
+      return;
+    }
+
+    if (!user) {
+      const params = new URLSearchParams(searchParams);
+      params.set('step', 'confirm');
+      params.set('outboundTripId', selectedOutboundTrip.id);
+      if (selectedReturnTrip) params.set('returnTripId', selectedReturnTrip.id);
+      params.set('seats', selectedSeatNumbers.join(','));
+      navigate(`/auth?redirect=${encodeURIComponent(`/book?${params.toString()}`)}`);
       return;
     }
 
     try {
-      const seatNumbers = Array.from({ length: passengerCount }, (_, i) => i + 1);
-      const outboundFare = (selectedRoute?.base_fare || 0) * passengerCount;
-      const returnFare = tripType === 'round-trip' && selectedReturnTrip 
-        ? (returnRoute?.base_fare || 0) * passengerCount 
+      const outboundFare = getFarePerSeat(selectedOutboundTrip, selectedRoute) * passengerCount;
+      const returnFare = tripType === 'round-trip' && selectedReturnTrip
+        ? getFarePerSeat(selectedReturnTrip, returnRoute) * passengerCount
         : 0;
 
       await createBooking.mutateAsync({
         user_id: user.id,
         outbound_trip_id: selectedOutboundTrip.id,
         return_trip_id: selectedReturnTrip?.id,
-        seat_numbers: seatNumbers,
+        seat_numbers: selectedSeatNumbers,
         passenger_count: passengerCount,
         outbound_fare: outboundFare,
         return_fare: returnFare,
@@ -161,11 +225,10 @@ export default function BookTicketPage() {
         payment_method: 'card',
       });
 
-      toast.success('Booking confirmed successfully!');
-      // Reset all form state for new booking
       setStep('search');
       setSelectedOutboundTrip(null);
       setSelectedReturnTrip(null);
+      setSelectedSeatNumbers([]);
       setOutboundResults([]);
       setReturnResults([]);
       setSelectedRouteId('');
@@ -174,7 +237,7 @@ export default function BookTicketPage() {
       setReturnDate(undefined);
       setPassengerCount(1);
     } catch (error) {
-      toast.error('Failed to create booking');
+      toast.error(error instanceof Error ? error.message : 'Failed to create booking');
     }
   };
 
@@ -182,10 +245,16 @@ export default function BookTicketPage() {
     return routes?.find((r: any) => r.id === routeId);
   };
 
+  /** Fare per seat: use trip override if set, else route base_fare */
+  const getFarePerSeat = (trip: any, route: any) => {
+    if (trip?.fare != null && trip.fare !== undefined) return Number(trip.fare);
+    return route?.base_fare ?? 0;
+  };
+
   const totalFare = () => {
-    const outbound = (selectedRoute?.base_fare || 0) * passengerCount;
-    const returnAmt = tripType === 'round-trip' && selectedReturnTrip 
-      ? (returnRoute?.base_fare || 0) * passengerCount 
+    const outbound = getFarePerSeat(selectedOutboundTrip, selectedRoute) * passengerCount;
+    const returnAmt = tripType === 'round-trip' && selectedReturnTrip
+      ? getFarePerSeat(selectedReturnTrip, returnRoute) * passengerCount
       : 0;
     return outbound + returnAmt;
   };
@@ -195,7 +264,8 @@ export default function BookTicketPage() {
       case 'search': return 1;
       case 'select-outbound': return 2;
       case 'select-return': return 3;
-      case 'confirm': return tripType === 'round-trip' ? 4 : 3;
+      case 'select-seats': return tripType === 'round-trip' ? 4 : 3;
+      case 'confirm': return tripType === 'round-trip' ? 5 : 4;
       default: return 1;
     }
   };
@@ -223,10 +293,36 @@ export default function BookTicketPage() {
           </>
         )}
         <Separator className="w-4 md:w-8" />
+        <Badge variant={step === 'select-seats' ? 'default' : 'secondary'}>
+          {tripType === 'round-trip' ? '4' : '3'}. Seats
+        </Badge>
+        <Separator className="w-4 md:w-8" />
         <Badge variant={step === 'confirm' ? 'default' : 'secondary'}>
-          {tripType === 'round-trip' ? '4' : '3'}. Confirm
+          {tripType === 'round-trip' ? '5' : '4'}. Confirm
         </Badge>
       </div>
+
+      {step !== 'search' && selectedRoute && (
+        <Card className="bg-muted/50">
+          <CardContent className="py-3 px-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+              <span className="font-medium">
+                {selectedRoute.origin} → {selectedRoute.destination}
+              </span>
+              <span className="text-muted-foreground">
+                {searchDate && format(searchDate, 'PPP')}
+                {tripType === 'round-trip' && returnDate && ` · Return ${format(returnDate, 'PPP')}`}
+              </span>
+              <span className="text-muted-foreground">
+                {passengerCount} passenger{passengerCount > 1 ? 's' : ''}
+              </span>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setStep('search')}>
+              Change search
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {step === 'search' && (
         <Card>
@@ -237,7 +333,33 @@ export default function BookTicketPage() {
             </CardTitle>
             <CardDescription>Find available buses for your journey</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+            <CardContent className="space-y-4">
+            {/* Recent Routes */}
+            {recentRoutes && recentRoutes.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-sm text-muted-foreground flex items-center gap-2">
+                  <History className="h-4 w-4" />
+                  Book Again
+                </Label>
+                <div className="flex flex-wrap gap-2">
+                  {recentRoutes.map((route: any) => (
+                    <Button
+                      key={route.id}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedRouteId(route.id);
+                        setSearchDate(new Date());
+                      }}
+                      className="text-xs"
+                    >
+                      {route.origin} → {route.destination}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Trip Type Toggle */}
             <div className="flex gap-4">
               <label className="flex items-center gap-2 cursor-pointer">
@@ -287,29 +409,72 @@ export default function BookTicketPage() {
 
               <div className="space-y-2">
                 <Label>Departure Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
+                <div className="space-y-2">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          'w-full justify-start text-left font-normal',
+                          !searchDate && 'text-muted-foreground'
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {searchDate ? format(searchDate, 'PPP') : 'Pick a date'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={searchDate}
+                        onSelect={setSearchDate}
+                        initialFocus
+                        disabled={(date) => date < new Date()}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <div className="flex flex-wrap gap-1">
                     <Button
-                      variant="outline"
-                      className={cn(
-                        'w-full justify-start text-left font-normal',
-                        !searchDate && 'text-muted-foreground'
-                      )}
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => setSearchDate(new Date())}
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {searchDate ? format(searchDate, 'PPP') : 'Pick a date'}
+                      Today
                     </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={searchDate}
-                      onSelect={setSearchDate}
-                      initialFocus
-                      disabled={(date) => date < new Date()}
-                    />
-                  </PopoverContent>
-                </Popover>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => setSearchDate(addDays(new Date(), 1))}
+                    >
+                      Tomorrow
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => {
+                        const saturday = addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), 5);
+                        setSearchDate(saturday >= new Date() ? saturday : addDays(saturday, 7));
+                      }}
+                    >
+                      This Weekend
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => setSearchDate(addDays(new Date(), 7))}
+                    >
+                      Next Week
+                    </Button>
+                  </div>
+                </div>
               </div>
 
               {tripType === 'round-trip' && (
@@ -457,7 +622,7 @@ export default function BookTicketPage() {
                           </div>
                           <div className="text-right">
                             <p className="text-2xl font-bold text-primary">
-                              {formatCurrency(route?.base_fare || 0)}
+                              {formatCurrency(getFarePerSeat(trip, route))}
                             </p>
                             <p className="text-xs text-muted-foreground">per person</p>
                           </div>
@@ -560,7 +725,7 @@ export default function BookTicketPage() {
                           </div>
                           <div className="text-right">
                             <p className="text-2xl font-bold text-primary">
-                              {formatCurrency(route?.base_fare || 0)}
+                              {formatCurrency(getFarePerSeat(trip, route))}
                             </p>
                             <p className="text-xs text-muted-foreground">per person</p>
                           </div>
@@ -573,6 +738,43 @@ export default function BookTicketPage() {
             </div>
           )}
         </div>
+      )}
+
+      {step === 'select-seats' && selectedOutboundTrip && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Sofa className="h-5 w-5 text-primary" />
+              Select your seats
+            </CardTitle>
+            <CardDescription>
+              Same seats for {tripType === 'round-trip' ? 'outbound and return' : 'this trip'}. Grey seats are taken.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <SeatPicker
+              tripId={selectedOutboundTrip.id}
+              passengerCount={passengerCount}
+              value={selectedSeatNumbers}
+              onChange={setSelectedSeatNumbers}
+              label="Outbound trip"
+            />
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setStep(tripType === 'round-trip' ? 'select-return' : 'select-outbound')}
+              >
+                Back
+              </Button>
+              <Button
+                onClick={() => setStep('confirm')}
+                disabled={selectedSeatNumbers.length !== passengerCount}
+              >
+                Continue to summary
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {step === 'confirm' && selectedOutboundTrip && (
@@ -672,18 +874,22 @@ export default function BookTicketPage() {
                 <span className="text-muted-foreground">Passengers</span>
                 <span className="font-medium">{passengerCount}</span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Seats</span>
+                <span className="font-medium">{selectedSeatNumbers.join(', ')}</span>
+              </div>
               <Separator />
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Outbound fare ({passengerCount}x)</span>
                 <span className="font-medium">
-                  {formatCurrency((selectedRoute?.base_fare || 0) * passengerCount)}
+                  {formatCurrency(getFarePerSeat(selectedOutboundTrip, selectedRoute) * passengerCount)}
                 </span>
               </div>
               {tripType === 'round-trip' && selectedReturnTrip && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Return fare ({passengerCount}x)</span>
                   <span className="font-medium">
-                    {formatCurrency((returnRoute?.base_fare || 0) * passengerCount)}
+                    {formatCurrency(getFarePerSeat(selectedReturnTrip, returnRoute) * passengerCount)}
                   </span>
                 </div>
               )}
@@ -693,17 +899,20 @@ export default function BookTicketPage() {
                 <span className="font-bold text-primary">{formatCurrency(totalFare())}</span>
               </div>
 
+              <p className="text-xs text-muted-foreground">
+                Payment can be completed at the terminal or later from My Bookings.
+              </p>
               <div className="pt-4 space-y-3">
                 <Button onClick={handleConfirmBooking} className="w-full" disabled={createBooking.isPending}>
                   <CreditCard className="mr-2 h-4 w-4" />
-                  {createBooking.isPending ? 'Processing...' : 'Confirm & Pay'}
+                  {createBooking.isPending ? 'Processing...' : user ? 'Confirm booking' : 'Sign in to confirm'}
                 </Button>
-                <Button 
-                  variant="outline" 
-                  className="w-full" 
-                  onClick={() => setStep(tripType === 'round-trip' ? 'select-return' : 'select-outbound')}
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setStep('select-seats')}
                 >
-                  Back to Trip Selection
+                  Back to seat selection
                 </Button>
               </div>
             </CardContent>

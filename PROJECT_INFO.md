@@ -1,6 +1,6 @@
 # Project Info
 
-Canonical reference for this project.
+Canonical reference for this project. **App name:** FleetMaster Bus Management (EagleLine in some contexts).
 
 ## GitHub Repository
 
@@ -21,3 +21,10 @@ git remote -v
 ```
 
 Push to `origin main` to deploy (when Vercel is connected to this repo).
+
+## Documentation
+
+- **README.md** – Setup, scripts, key routes, Traccar, deployment
+- **PLATFORM_WORKBOOK.md** – Admin SOP, daily tasks, troubleshooting
+- **TRACCAR_SUPABASE_SETUP.md** – Traccar webhook and Cloudflare Tunnel
+- **TRACKING_SETUP.md** – Live tracking and bus location mapping

@@ -37,6 +37,7 @@ import {
   Navigation,
   AlertTriangle,
   ClipboardList,
+  Activity,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -62,6 +63,7 @@ const menuItems = {
     { title: 'Accounts', url: '/accounts', icon: DollarSign },
     { title: 'Customer Service', url: '/customer-service', icon: Headphones },
     { title: 'Reports', url: '/reports', icon: BarChart3 },
+    { title: 'System Status', url: '/admin/system-status', icon: Activity },
     { title: 'Settings', url: '/settings', icon: Settings },
   ],
   driver: [
@@ -73,7 +75,6 @@ const menuItems = {
   ],
   passenger: [
     { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
-    { title: 'Stations', url: '/stations', icon: Building2 },
     { title: 'Book Ticket', url: '/book', icon: Ticket },
     { title: 'My Bookings', url: '/my-bookings', icon: Calendar },
     { title: 'Track Bus', url: '/tracking', icon: MapPin },
@@ -95,7 +96,6 @@ const menuItems = {
   ],
   staff: [
     { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
-    { title: 'Stations', url: '/stations', icon: Building2 },
     { title: 'Routes', url: '/routes', icon: Route },
     { title: 'Schedules', url: '/schedules', icon: Calendar },
     { title: 'Bookings', url: '/bookings', icon: Ticket },

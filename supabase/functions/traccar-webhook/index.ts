@@ -23,8 +23,17 @@ serve(async (req) => {
     const webhookSecret = Deno.env.get('TRACCAR_WEBHOOK_SECRET')?.trim();
     const isValid = token && (token === serviceKey || (webhookSecret && token === webhookSecret));
     if (!isValid) {
+      console.warn('[traccar-webhook] 401 Unauthorized', {
+        hasAuthHeader: !!authHeader,
+        hasToken: !!token,
+        tokenLen: token?.length ?? 0,
+        hasWebhookSecret: !!webhookSecret,
+      });
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
+        JSON.stringify({
+          error: 'Unauthorized',
+          hint: 'Check forward.header in traccar.xml. Use TRACCAR_WEBHOOK_SECRET (simple token) instead of service_role key to avoid XML escaping issues.',
+        }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -41,16 +50,23 @@ serve(async (req) => {
 
     const device = rawBody.device as Record<string, unknown> | undefined;
     const position = rawBody.position as Record<string, unknown> | undefined;
-    // Traccar sends { device: { id }, position: { deviceId, latitude, longitude, ... } }
-    const deviceId = rawBody.deviceId ?? position?.deviceId ?? device?.id;
-    const lat = rawBody.latitude ?? position?.latitude ?? rawBody.lat;
-    const lng = rawBody.longitude ?? position?.longitude ?? rawBody.lng ?? rawBody.lon;
+    // Traccar formats: flat {deviceId, latitude, longitude} or nested {device:{id}, position:{...}}
+    const deviceIdRaw = rawBody.deviceId ?? position?.deviceId ?? device?.id ?? rawBody.id ?? position?.id;
+    const deviceId = deviceIdRaw != null ? (typeof deviceIdRaw === 'string' ? parseInt(deviceIdRaw, 10) : Number(deviceIdRaw)) : null;
+    const latRaw = rawBody.latitude ?? position?.latitude ?? rawBody.lat;
+    const lngRaw = rawBody.longitude ?? position?.longitude ?? rawBody.lng ?? rawBody.lon;
+    const lat = typeof latRaw === 'number' ? latRaw : (typeof latRaw === 'string' ? parseFloat(latRaw) : null);
+    const lng = typeof lngRaw === 'number' ? lngRaw : (typeof lngRaw === 'string' ? parseFloat(lngRaw) : null);
 
-    console.log('[traccar-webhook] Received', { deviceId, lat, lng, hasDevice: !!device, hasPosition: !!position });
+    const payloadKeys = Object.keys(rawBody);
+    console.log('[traccar-webhook] Received', { deviceId, lat, lng, payloadKeys });
 
-    if (deviceId == null || typeof lat !== 'number' || typeof lng !== 'number') {
+    if (deviceId == null || isNaN(deviceId) || lat == null || lng == null || isNaN(lat) || isNaN(lng)) {
       return new Response(
-        JSON.stringify({ error: 'Missing deviceId, latitude, or longitude' }),
+        JSON.stringify({
+          error: 'Missing deviceId, latitude, or longitude',
+          received: { deviceId: deviceIdRaw, lat: latRaw, lng: lngRaw, payloadKeys },
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

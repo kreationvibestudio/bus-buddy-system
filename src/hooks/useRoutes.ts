@@ -19,6 +19,42 @@ export function useRoutes() {
   });
 }
 
+/** All routes (no is_active filter) for admin/staff management e.g. daily_bus_count */
+export function useAllRoutes() {
+  return useQuery({
+    queryKey: ['routes', 'all'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('routes')
+        .select('*')
+        .order('name', { ascending: true });
+      
+      if (error) throw error;
+      return data as Route[];
+    },
+  });
+}
+
+export function useRegenerateUpcomingTrips() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc('regenerate_upcoming_trips');
+      if (error) throw error;
+      return data as number;
+    },
+    onSuccess: (count) => {
+      queryClient.invalidateQueries({ queryKey: ['trips'] });
+      queryClient.invalidateQueries({ queryKey: ['routes'] });
+      queryClient.invalidateQueries({ queryKey: ['routes', 'all'] });
+      toast.success(`Regenerated ${count} upcoming trips`);
+    },
+    onError: (error: Error) => {
+      toast.error('Failed to regenerate trips: ' + error.message);
+    },
+  });
+}
+
 export function useRoute(id: string) {
   return useQuery({
     queryKey: ['routes', id],

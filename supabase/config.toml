@@ -35,3 +35,9 @@ verify_jwt = false
 
 [functions.get-shared-location]
 verify_jwt = false
+
+[functions.system-status]
+verify_jwt = false
+
+[functions.test-traccar-webhook]
+verify_jwt = true

@@ -53,10 +53,11 @@ export function PassengerDashboard() {
     enabled: !!user?.id,
   });
 
-  // Get upcoming bookings (confirmed, not past, sorted by date)
+  // Upcoming trips: paid or booked for the future (confirmed or pending, not cancelled), trip date today or later
   const upcomingBookings = bookings
     ?.filter((b: any) => {
-      if (b.status !== 'confirmed' || !b.trip) return false;
+      if (!b.trip) return false;
+      if (b.status === 'cancelled') return false;
       const tripDate = parseISO(b.trip.trip_date);
       return !isPast(tripDate) || isToday(tripDate);
     })
@@ -75,6 +76,26 @@ export function PassengerDashboard() {
   const completedBookings = bookings
     ?.filter((b: any) => b.status === 'completed' || b.trip?.status === 'completed')
     .slice(0, 3) || [];
+
+  // Get today's trips
+  const todaysTrips = upcomingBookings.filter((b: any) => {
+    if (!b.trip) return false;
+    return isToday(parseISO(b.trip.trip_date));
+  });
+
+  // Get unique recent routes (from completed bookings)
+  const recentRoutes = Array.from(
+    new Map(
+      completedBookings
+        .map((b: any) => ({
+          routeId: b.trip?.route?.name,
+          origin: b.trip?.route?.origin,
+          destination: b.trip?.route?.destination,
+        }))
+        .filter((r: any) => r.routeId)
+        .map((r: any) => [r.routeId, r])
+    ).values()
+  ).slice(0, 3);
 
   // Stats
   const totalTrips = bookings?.filter((b: any) => b.status === 'completed').length || 0;
@@ -107,7 +128,7 @@ export function PassengerDashboard() {
             Ready for your next journey?
           </p>
         </div>
-        <Button onClick={() => navigate('/book-ticket')} size="lg" className="gap-2">
+        <Button onClick={() => navigate('/book')} size="lg" className="gap-2">
           <Plus className="h-5 w-5" />
           Book a Trip
         </Button>
@@ -143,7 +164,7 @@ export function PassengerDashboard() {
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigate('/my-bookings')}>
+        <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigate('/my-bookings?filter=upcoming')}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Upcoming Trips
@@ -207,6 +228,53 @@ export function PassengerDashboard() {
         </Card>
       </div>
 
+      {/* Today's Trips */}
+      {todaysTrips.length > 0 && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-primary" />
+              Today's Trips
+            </CardTitle>
+            <CardDescription>Trips scheduled for today</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {todaysTrips.map((booking: any) => (
+                <div
+                  key={booking.id}
+                  className="p-4 rounded-lg border bg-card hover:bg-muted/50 cursor-pointer transition-colors"
+                  onClick={() => navigate('/my-bookings')}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <span>{booking.trip?.route?.origin}</span>
+                        <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                        <span>{booking.trip?.route?.destination}</span>
+                      </div>
+                      <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3.5 w-3.5" />
+                          {booking.trip?.departure_time?.slice(0, 5)}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Ticket className="h-3.5 w-3.5" />
+                          Seats: {booking.seat_numbers?.join(', ') || '-'}
+                        </span>
+                      </div>
+                    </div>
+                    <Badge variant="default" className="text-xs">
+                      {getTimeUntilTrip(booking.trip?.trip_date, booking.trip?.departure_time)}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid gap-6 md:grid-cols-2">
         {/* Upcoming Trips */}
         <Card>
@@ -229,7 +297,7 @@ export function PassengerDashboard() {
                   <div
                     key={booking.id}
                     className="p-4 rounded-lg border bg-card hover:bg-muted/50 cursor-pointer transition-colors"
-                    onClick={() => navigate('/my-bookings')}
+                    onClick={() => navigate('/my-bookings?filter=upcoming')}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
@@ -256,7 +324,7 @@ export function PassengerDashboard() {
                   </div>
                 ))}
                 {upcomingBookings.length > 3 && (
-                  <Button variant="ghost" className="w-full" onClick={() => navigate('/my-bookings')}>
+                  <Button variant="ghost" className="w-full" onClick={() => navigate('/my-bookings?filter=upcoming')}>
                     View all {upcomingBookings.length} trips
                   </Button>
                 )}
@@ -265,7 +333,7 @@ export function PassengerDashboard() {
               <div className="text-center py-8">
                 <Bus className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
                 <p className="text-muted-foreground mb-4">No upcoming trips</p>
-                <Button onClick={() => navigate('/book-ticket')} variant="outline">
+                <Button onClick={() => navigate('/book')} variant="outline">
                   Book Your First Trip
                 </Button>
               </div>
@@ -287,7 +355,7 @@ export function PassengerDashboard() {
               <Button
                 variant="outline"
                 className="h-auto py-4 flex flex-col gap-2"
-                onClick={() => navigate('/book-ticket')}
+                onClick={() => navigate('/book')}
               >
                 <Plus className="h-5 w-5" />
                 <span className="text-xs">Book Trip</span>
@@ -319,6 +387,42 @@ export function PassengerDashboard() {
               </Button>
             </CardContent>
           </Card>
+
+          {/* Book Again - Recent Routes */}
+          {recentRoutes.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <History className="h-5 w-5 text-primary" />
+                  Book Again
+                </CardTitle>
+                <CardDescription>Quick book from your recent routes</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {recentRoutes.map((route: any, idx: number) => (
+                  <Button
+                    key={idx}
+                    variant="outline"
+                    className="w-full justify-start h-auto py-3"
+                    onClick={() => {
+                      const params = new URLSearchParams();
+                      params.set('from', route.origin);
+                      params.set('to', route.destination);
+                      navigate(`/book?${params.toString()}`);
+                    }}
+                  >
+                    <div className="flex items-center gap-2 flex-1">
+                      <MapPin className="h-4 w-4" />
+                      <div className="text-left flex-1">
+                        <p className="text-sm font-medium">{route.origin} → {route.destination}</p>
+                      </div>
+                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                  </Button>
+                ))}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Travel Tips */}
           <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">

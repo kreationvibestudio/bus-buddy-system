@@ -1,41 +1,78 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
-import { format } from 'date-fns';
-import { Search, Ticket, Calendar, MapPin, Clock, X, ArrowLeftRight, ArrowRight } from 'lucide-react';
-import { useBookings, useCancelBooking } from '@/hooks/useBookings';
+import { format, parseISO, isPast } from 'date-fns';
+import { Search, Ticket, Calendar, MapPin, Clock, X, ArrowLeftRight, ArrowRight, Banknote, Eye, Printer, CheckCircle } from 'lucide-react';
+import { useMyBookings, useCancelBooking, useMarkBookingPaid } from '@/hooks/useBookings';
 import { useRoutes } from '@/hooks/useRoutes';
 import { useTrips } from '@/hooks/useSchedules';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/currency';
+import { TicketPrintView } from '@/components/booking/TicketPrintView';
 
 export default function MyBookingsPage() {
-  const { user } = useAuth();
-  const { data: bookings, isLoading } = useBookings();
+  const { user, profile } = useAuth();
+  const [searchParams] = useSearchParams();
+  const bookingSearchParam = searchParams.get('search') ?? '';
+  const filterUpcoming = searchParams.get('filter') === 'upcoming';
+  const { data: bookings, isLoading } = useMyBookings();
   const { data: routes } = useRoutes();
   const { data: trips } = useTrips();
   const cancelBooking = useCancelBooking();
-  
-  const [searchTerm, setSearchTerm] = useState('');
+  const markPaid = useMarkBookingPaid();
+
+  const [searchTerm, setSearchTerm] = useState(bookingSearchParam);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [printTicketBooking, setPrintTicketBooking] = useState<any>(null);
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
   const [cancellationReason, setCancellationReason] = useState('');
+  const [activeTab, setActiveTab] = useState<string>('all');
 
-  // Filter bookings for current user
-  const userBookings = bookings?.filter((b: any) => b.user_id === user?.id) || [];
-  
-  // Group round trip bookings together (only show outbound, hide return legs in main list)
+  useEffect(() => {
+    if (bookingSearchParam) setSearchTerm(bookingSearchParam);
+    if (filterUpcoming) setActiveTab('upcoming');
+  }, [bookingSearchParam, filterUpcoming]);
+
+  const userBookings = bookings ?? [];
   const displayBookings = userBookings.filter((b: any) => !b.is_return_leg);
+
+  const isUpcomingBooking = (b: any) => {
+    if (b.status === 'cancelled') return false;
+    const trip = (b as any).trip ?? getTripDetails(b.trip_id);
+    if (!trip?.trip_date) return false;
+    const tripDate = parseISO(trip.trip_date);
+    return !isPast(tripDate);
+  };
+
+  const bookingsForFilter = filterUpcoming
+    ? displayBookings.filter(isUpcomingBooking)
+    : displayBookings;
   
-  const filteredBookings = displayBookings.filter((booking: any) =>
-    booking.booking_number?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filter by tab
+  const bookingsByTab = activeTab === 'all'
+    ? bookingsForFilter
+    : activeTab === 'upcoming'
+    ? bookingsForFilter.filter(isUpcomingBooking)
+    : activeTab === 'completed'
+    ? bookingsForFilter.filter((b: any) => b.status === 'completed' || (b as any).trip?.status === 'completed')
+    : activeTab === 'cancelled'
+    ? bookingsForFilter.filter((b: any) => b.status === 'cancelled')
+    : bookingsForFilter;
+
+  const filteredBookings = searchTerm
+    ? bookingsByTab.filter((b: any) =>
+        b.booking_number?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : bookingsByTab;
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -70,6 +107,11 @@ export default function MyBookingsPage() {
   const handleCancelClick = (booking: any) => {
     setSelectedBooking(booking);
     setCancelDialogOpen(true);
+  };
+
+  const openDetails = (booking: any) => {
+    setSelectedBooking(booking);
+    setDetailsDialogOpen(true);
   };
 
   const handleConfirmCancel = async () => {
@@ -161,8 +203,8 @@ export default function MyBookingsPage() {
         </Card>
       </div>
 
-      {/* Search */}
-      <div className="flex items-center gap-4">
+      {/* Search and filter */}
+      <div className="flex flex-wrap items-center gap-4">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -173,17 +215,44 @@ export default function MyBookingsPage() {
           />
         </div>
       </div>
+      {filterUpcoming && (
+        <p className="text-sm text-muted-foreground">
+          Showing only upcoming trips (today and future). <a href="/my-bookings" className="text-primary underline hover:no-underline">Show all bookings</a>
+        </p>
+      )}
 
-      {/* Bookings List */}
-      {filteredBookings.length === 0 ? (
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="all">All</TabsTrigger>
+          <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
+          <TabsTrigger value="completed">Completed</TabsTrigger>
+          <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value={activeTab} className="mt-4">
+          {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="all">All</TabsTrigger>
+          <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
+          <TabsTrigger value="completed">Completed</TabsTrigger>
+          <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value={activeTab} className="mt-4">
+          {/* Bookings List */}
+          {filteredBookings.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
             <Ticket className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">No Bookings Found</h3>
             <p className="text-muted-foreground mb-4">
-              {displayBookings.length === 0 
-                ? "You haven't made any bookings yet" 
-                : "No bookings match your search"}
+              {displayBookings.length === 0
+                ? "You haven't made any bookings yet"
+                : searchTerm
+                  ? `No booking found with number "${searchTerm}". Check the number and try again.`
+                  : "No bookings match your search"}
             </p>
             <Button asChild>
               <a href="/book">Book a Ticket</a>
@@ -235,28 +304,77 @@ export default function MyBookingsPage() {
                         </div>
                       </div>
                       
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-4 flex-wrap">
                         <div className="text-right">
                           <p className="text-sm text-muted-foreground">Total Fare</p>
                           <p className="text-xl font-bold text-primary">{formatCurrency(totalFare)}</p>
                           <p className="text-xs text-muted-foreground">
                             {booking.passenger_count} passenger{booking.passenger_count > 1 ? 's' : ''}
+                            {booking.seat_numbers?.length ? ` · Seats ${booking.seat_numbers.join(', ')}` : ''}
                           </p>
                         </div>
-                        
-                        {booking.status === 'confirmed' && booking.payment_status !== 'completed' && (
-                          <Button 
-                            variant="outline" 
+
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openDetails(booking)}
+                        >
+                          <Eye className="h-4 w-4 mr-1" />
+                          View details
+                        </Button>
+                        {booking.status !== 'cancelled' && (
+                          <Button
+                            variant="ghost"
                             size="sm"
-                            onClick={() => handleCancelClick(booking)}
+                            onClick={() => setPrintTicketBooking(booking)}
                           >
-                            <X className="h-4 w-4 mr-1" />
-                            Cancel
+                            <Printer className="h-4 w-4 mr-1" />
+                            Print ticket
                           </Button>
                         )}
-                        {booking.status === 'confirmed' && booking.payment_status === 'completed' && (
+                        
+                        {(booking.status === 'confirmed' || booking.status === 'pending') && booking.payment_status !== 'completed' && booking.status !== 'cancelled' && (
+                          <>
+                            <Button
+                              variant="default"
+                              size="sm"
+                              disabled={markPaid.isPending}
+                              onClick={async () => {
+                                try {
+                                  await markPaid.mutateAsync({
+                                    bookingId: booking.id,
+                                    amount: booking.total_fare,
+                                    method: 'cash',
+                                  });
+                                  const returnB = getReturnBooking(booking);
+                                  if (returnB) {
+                                    await markPaid.mutateAsync({
+                                      bookingId: returnB.id,
+                                      amount: returnB.total_fare,
+                                      method: 'cash',
+                                    });
+                                  }
+                                } catch {
+                                  // toast from mutation
+                                }
+                              }}
+                            >
+                              <Banknote className="h-4 w-4 mr-1" />
+                              Pay at terminal
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleCancelClick(booking)}
+                            >
+                              <X className="h-4 w-4 mr-1" />
+                              Cancel
+                            </Button>
+                          </>
+                        )}
+                        {(booking.status === 'confirmed' || booking.status === 'pending') && booking.payment_status === 'completed' && (
                           <Badge variant="secondary" className="text-xs">
-                            Paid - Non-refundable
+                            Paid
                           </Badge>
                         )}
                       </div>
@@ -335,7 +453,135 @@ export default function MyBookingsPage() {
             );
           })}
         </div>
-      )}
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {/* Booking details dialog – available for any status (pending, confirmed, cancelled, completed) */}
+      <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Booking details</DialogTitle>
+            <DialogDescription>
+              {selectedBooking?.booking_number}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedBooking && (() => {
+            // Prefer embedded trip/route from API (works for all dates); fallback to hooks (next 30 days only)
+            const trip = (selectedBooking as any).trip ?? getTripDetails(selectedBooking.trip_id);
+            const route = (trip as any)?.route ?? (trip ? getRouteDetails(trip.route_id) : null);
+            const returnBooking = getReturnBooking(selectedBooking);
+            const returnTrip = (returnBooking as any)?.trip ?? (returnBooking ? getTripDetails(returnBooking.trip_id) : null);
+            const returnRoute = (returnTrip as any)?.route ?? (returnTrip ? getRouteDetails(returnTrip.route_id) : null);
+            const isRoundTrip = selectedBooking.booking_type === 'round_trip';
+            const totalFare = isRoundTrip && returnBooking
+              ? selectedBooking.total_fare + returnBooking.total_fare
+              : selectedBooking.total_fare;
+            return (
+              <div className="space-y-4 py-2">
+                <div className="flex items-center gap-2">
+                  {getStatusBadge(selectedBooking.status)}
+                  {(selectedBooking.status === 'confirmed' || selectedBooking.status === 'pending') && selectedBooking.payment_status === 'completed' && (
+                    <Badge variant="secondary">Paid</Badge>
+                  )}
+                </div>
+                <div className="text-sm">
+                  <p className="text-muted-foreground">Booked on</p>
+                  <p className="font-medium">{format(new Date(selectedBooking.booked_at), 'PPP p')}</p>
+                </div>
+                <div className="text-sm">
+                  <p className="text-muted-foreground">Payment</p>
+                  <p className="font-medium capitalize">{selectedBooking.payment_status ?? 'pending'}</p>
+                  <p className="font-semibold text-primary mt-1">{formatCurrency(totalFare)}</p>
+                  <p className="text-muted-foreground text-xs">{selectedBooking.passenger_count} passenger{selectedBooking.passenger_count > 1 ? 's' : ''}</p>
+                  {selectedBooking.seat_numbers?.length ? (
+                    <p className="text-muted-foreground text-xs">Seats: {selectedBooking.seat_numbers.join(', ')}</p>
+                  ) : null}
+                </div>
+                <Separator />
+                <div className="space-y-2">
+                  <p className="text-sm font-medium flex items-center gap-1">
+                    <ArrowRight className="h-4 w-4 text-primary" />
+                    Outbound
+                  </p>
+                  <p className="text-sm">
+                    <MapPin className="h-4 w-4 inline mr-1 text-muted-foreground" />
+                    {route ? `${route.origin} → ${route.destination}` : 'Route details'}
+                  </p>
+                  {trip && (
+                    <p className="text-sm text-muted-foreground flex items-center gap-3">
+                      <span className="flex items-center gap-1"><Calendar className="h-4 w-4" />{trip.trip_date}</span>
+                      <span className="flex items-center gap-1"><Clock className="h-4 w-4" />{trip.departure_time}</span>
+                    </p>
+                  )}
+                </div>
+                {isRoundTrip && returnTrip && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium flex items-center gap-1">
+                      <ArrowLeftRight className="h-4 w-4 text-secondary-foreground" />
+                      Return
+                    </p>
+                    <p className="text-sm">
+                      <MapPin className="h-4 w-4 inline mr-1 text-muted-foreground" />
+                      {returnRoute ? `${returnRoute.origin} → ${returnRoute.destination}` : 'Route details'}
+                    </p>
+                    <p className="text-sm text-muted-foreground flex items-center gap-3">
+                      <span className="flex items-center gap-1"><Calendar className="h-4 w-4" />{returnTrip.trip_date}</span>
+                      <span className="flex items-center gap-1"><Clock className="h-4 w-4" />{returnTrip.departure_time}</span>
+                    </p>
+                  </div>
+                )}
+                {selectedBooking.cancellation_reason && (
+                  <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                    <p className="text-sm font-medium">Cancellation reason</p>
+                    <p className="text-sm text-muted-foreground">{selectedBooking.cancellation_reason}</p>
+                  </div>
+                )}
+                <DialogFooter className="pt-4">
+                  {(selectedBooking.status === 'confirmed' || selectedBooking.status === 'pending') && selectedBooking.payment_status !== 'completed' && (
+                    <>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        disabled={markPaid.isPending}
+                        onClick={async () => {
+                          try {
+                            await markPaid.mutateAsync({
+                              bookingId: selectedBooking.id,
+                              amount: selectedBooking.total_fare,
+                              method: 'cash',
+                            });
+                            const returnB = getReturnBooking(selectedBooking);
+                            if (returnB) {
+                              await markPaid.mutateAsync({
+                                bookingId: returnB.id,
+                                amount: returnB.total_fare,
+                                method: 'cash',
+                              });
+                            }
+                            setDetailsDialogOpen(false);
+                          } catch {
+                            // toast from mutation
+                          }
+                        }}
+                      >
+                        <Banknote className="h-4 w-4 mr-1" />
+                        Pay at terminal
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => { setDetailsDialogOpen(false); handleCancelClick(selectedBooking); }}>
+                        Cancel booking
+                      </Button>
+                    </>
+                  )}
+                  <Button variant="secondary" onClick={() => setDetailsDialogOpen(false)}>
+                    Close
+                  </Button>
+                </DialogFooter>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
 
       {/* Cancel Dialog */}
       <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
@@ -374,6 +620,20 @@ export default function MyBookingsPage() {
               {cancelBooking.isPending ? 'Cancelling...' : 'Confirm Cancel'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Print Ticket Dialog */}
+      <Dialog open={!!printTicketBooking} onOpenChange={(open) => !open && setPrintTicketBooking(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          {printTicketBooking && (
+            <TicketPrintView
+              booking={printTicketBooking}
+              passengerName={profile?.full_name}
+              passengerPhone={profile?.phone}
+              onClose={() => setPrintTicketBooking(null)}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>

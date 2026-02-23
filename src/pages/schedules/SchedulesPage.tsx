@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useSchedules, useTrips, useTripsForDate, useCreateTrip } from '@/hooks/useSchedules';
+import { useSchedules, useTrips, useTripsForDate, useCreateTrip, useUpdateTrip } from '@/hooks/useSchedules';
 import { useRoutes } from '@/hooks/useRoutes';
 import { useBuses } from '@/hooks/useBuses';
 import { useDrivers } from '@/hooks/useDrivers';
@@ -14,7 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Calendar, Clock, Search, CalendarPlus } from 'lucide-react';
+import { Plus, Calendar, Clock, Search, CalendarPlus, Edit } from 'lucide-react';
+import { formatCurrency } from '@/lib/currency';
 import { format } from 'date-fns';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -31,6 +32,7 @@ export default function SchedulesPage() {
     departure_time: string;
     arrival_time: string;
     available_seats: number;
+    fare?: number;
   }>({
     route_id: '',
     bus_id: '',
@@ -39,6 +41,7 @@ export default function SchedulesPage() {
     departure_time: '08:00',
     arrival_time: '09:00',
     available_seats: 40,
+    fare: undefined,
   });
 
   const { data: schedules, isLoading: schedulesLoading } = useSchedules();
@@ -48,8 +51,10 @@ export default function SchedulesPage() {
   const { data: buses } = useBuses();
   const { data: drivers } = useDrivers();
   const createTrip = useCreateTrip();
+  const updateTrip = useUpdateTrip();
   const startTrip = useStartTrip();
   const { role } = useAuth();
+  const [editingTrip, setEditingTrip] = useState<{ id: string; fare: number | null } | null>(null);
 
   // Exclude buses and drivers that already have a trip on the selected date
   const { availableBuses, availableDrivers } = useMemo(() => {
@@ -98,15 +103,24 @@ export default function SchedulesPage() {
       departure_time: dep,
       arrival_time: arr,
       available_seats: 40,
+      fare: undefined,
     });
     setActiveTab('trips');
     setIsTripDialogOpen(true);
   };
 
+  const getTripFareDisplay = (trip: { fare?: number | null; route?: { base_fare?: number } | null }) => {
+    if (trip.fare != null && trip.fare !== undefined) return trip.fare;
+    return trip.route?.base_fare ?? null;
+  };
+
   const handleTripSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await createTrip.mutateAsync(tripForm);
+      const payload = { ...tripForm };
+      if (payload.fare === undefined || payload.fare === null || Number.isNaN(payload.fare)) delete (payload as any).fare;
+      else (payload as any).fare = Number(payload.fare);
+      await createTrip.mutateAsync(payload);
       setIsTripDialogOpen(false);
       setTripForm({
         route_id: '',
@@ -116,6 +130,7 @@ export default function SchedulesPage() {
         departure_time: '08:00',
         arrival_time: '09:00',
         available_seats: 40,
+        fare: undefined,
       });
     } catch (error) {
       // Error handled by mutation
@@ -310,6 +325,22 @@ export default function SchedulesPage() {
                             />
                           </div>
                         </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="trip_fare">Fare (₦) per seat</Label>
+                          <Input
+                            id="trip_fare"
+                            type="number"
+                            step="0.01"
+                            min={0}
+                            placeholder="Leave empty to use route base fare"
+                            value={tripForm.fare ?? ''}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setTripForm({ ...tripForm, fare: v === '' ? undefined : parseFloat(v) || undefined });
+                            }}
+                          />
+                          <p className="text-xs text-muted-foreground">Optional. When empty, the route&apos;s base fare is used for bookings.</p>
+                        </div>
                         <DialogFooter>
                           <Button type="button" variant="outline" onClick={() => setIsTripDialogOpen(false)}>
                             Cancel
@@ -334,22 +365,42 @@ export default function SchedulesPage() {
                     <TableHead>Bus</TableHead>
                     <TableHead>Departure</TableHead>
                     <TableHead>Arrival</TableHead>
+                    <TableHead>Fare</TableHead>
                     <TableHead>Available Seats</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredTrips?.map((trip) => (
+                  {filteredTrips?.map((trip) => {
+                    const fareDisplay = getTripFareDisplay(trip);
+                    return (
                     <TableRow key={trip.id}>
                       <TableCell>{format(new Date(trip.trip_date), 'MMM d, yyyy')}</TableCell>
                       <TableCell className="font-medium">{trip.route?.name || '-'}</TableCell>
                       <TableCell>{trip.bus?.registration_number || '-'}</TableCell>
                       <TableCell>{trip.departure_time}</TableCell>
                       <TableCell>{trip.arrival_time}</TableCell>
+                      <TableCell>
+                        {fareDisplay != null ? formatCurrency(fareDisplay) : '—'}
+                        {trip.fare != null && (
+                          <span className="text-xs text-muted-foreground ml-1">(set)</span>
+                        )}
+                      </TableCell>
                       <TableCell>{trip.available_seats}</TableCell>
                       <TableCell>{getStatusBadge(trip.status)}</TableCell>
                       <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                        {role === 'admin' && trip.status === 'scheduled' && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setEditingTrip({ id: trip.id, fare: trip.fare ?? null })}
+                            title="Set fare"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        )}
                         {trip.status === 'scheduled' && role === 'admin' && (
                           <Button
                             size="sm"
@@ -360,12 +411,14 @@ export default function SchedulesPage() {
                             {startTrip.isPending ? 'Starting...' : 'Start Trip'}
                           </Button>
                         )}
+                        </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                   {filteredTrips?.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                         No trips found
                       </TableCell>
                     </TableRow>
@@ -374,6 +427,50 @@ export default function SchedulesPage() {
               </Table>
             </CardContent>
           </Card>
+
+          {role === 'admin' && (
+            <Dialog open={!!editingTrip} onOpenChange={(open) => !open && setEditingTrip(null)}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Set trip fare</DialogTitle>
+                  <DialogDescription>Override fare per seat for this trip. Leave empty to use the route&apos;s base fare.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit_fare">Fare (₦) per seat</Label>
+                    <Input
+                      id="edit_fare"
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      placeholder="Use route base fare"
+                      value={editingTrip?.fare ?? ''}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (editingTrip) setEditingTrip({ ...editingTrip, fare: v === '' ? null : parseFloat(v) || null });
+                      }}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setEditingTrip(null)}>Cancel</Button>
+                  <Button
+                    disabled={updateTrip.isPending}
+                    onClick={async () => {
+                      if (!editingTrip) return;
+                      await updateTrip.mutateAsync({
+                        id: editingTrip.id,
+                        fare: editingTrip.fare === null || editingTrip.fare === undefined ? null : editingTrip.fare,
+                      });
+                      setEditingTrip(null);
+                    }}
+                  >
+                    {updateTrip.isPending ? 'Saving...' : 'Save'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
         </TabsContent>
 
         <TabsContent value="schedules" className="space-y-6">
