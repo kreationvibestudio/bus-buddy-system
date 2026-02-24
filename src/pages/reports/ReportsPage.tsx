@@ -9,6 +9,7 @@ import { useBookings } from '@/hooks/useBookings';
 import { useBuses } from '@/hooks/useBuses';
 import { useDrivers } from '@/hooks/useDrivers';
 import { useTransactions } from '@/hooks/useAccounts';
+import { useAllRoutes } from '@/hooks/useRoutes';
 import { formatCurrency } from '@/lib/currency';
 import { format, subMonths, startOfMonth } from 'date-fns';
 
@@ -21,6 +22,7 @@ const CHART_COLORS = {
 
 export default function ReportsPage() {
   const { data: bookings } = useBookings();
+  const { data: routes } = useAllRoutes();
   const { data: buses } = useBuses();
   const { data: drivers } = useDrivers();
   const { data: transactions } = useTransactions();
@@ -34,26 +36,43 @@ export default function ReportsPage() {
     ?.filter((t: any) => t.type === 'expense')
     .reduce((sum: number, t: any) => sum + Number(t.amount), 0) || 0;
 
-  // Route performance from actual bookings (by route)
+  // Route performance: all routes from DB, with bookings/revenue from actual bookings (0 if none)
   const routePerformance = useMemo(() => {
-    if (!bookings?.length) return [];
-    const byRoute: Record<string, { bookings: number; revenue: number }> = {};
-    bookings
+    const byRouteId: Record<string, { bookings: number; revenue: number }> = {};
+    (bookings || [])
+      .filter((b: any) => b.status !== 'cancelled' && b.trip_id)
+      .forEach((b: any) => {
+        const routeId = b.trip?.route_id ?? b.trip?.route?.id ?? 'unknown';
+        if (!byRouteId[routeId]) byRouteId[routeId] = { bookings: 0, revenue: 0 };
+        byRouteId[routeId].bookings += 1;
+        byRouteId[routeId].revenue += Number(b.total_fare) || 0;
+      });
+    if (routes?.length) {
+      return (routes as any[])
+        .map((r: any) => {
+          const stats = byRouteId[r.id] ?? { bookings: 0, revenue: 0 };
+          const name = `${r.origin || 'Origin'} – ${r.destination || 'Destination'}`;
+          return { name, bookings: stats.bookings, revenue: stats.revenue };
+        })
+        .sort((a, b) => b.revenue - a.revenue);
+    }
+    // Fallback when routes not loaded: group by route name from booking's trip
+    const byName: Record<string, { bookings: number; revenue: number }> = {};
+    (bookings || [])
       .filter((b: any) => b.status !== 'cancelled')
       .forEach((b: any) => {
         const route = b.trip?.route;
         const name = route
-          ? `${route.origin || 'Origin'}–${route.destination || 'Destination'}`
+          ? `${route.origin || 'Origin'} – ${route.destination || 'Destination'}`
           : 'Unknown route';
-        if (!byRoute[name]) byRoute[name] = { bookings: 0, revenue: 0 };
-        byRoute[name].bookings += 1;
-        byRoute[name].revenue += Number(b.total_fare) || 0;
+        if (!byName[name]) byName[name] = { bookings: 0, revenue: 0 };
+        byName[name].bookings += 1;
+        byName[name].revenue += Number(b.total_fare) || 0;
       });
-    return Object.entries(byRoute)
+    return Object.entries(byName)
       .map(([name, d]) => ({ name, bookings: d.bookings, revenue: d.revenue }))
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 12);
-  }, [bookings]);
+      .sort((a, b) => b.revenue - a.revenue);
+  }, [bookings, routes]);
 
   // Monthly revenue and bookings (last 6 months from bookings)
   const monthlyRevenue = useMemo(() => {
