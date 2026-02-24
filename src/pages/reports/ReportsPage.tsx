@@ -1,42 +1,30 @@
+import { useMemo, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { BarChart3, TrendingUp, Users, Bus, Ticket, Banknote } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { BarChart3, TrendingUp, Users, Bus, Ticket, Banknote, Printer } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from 'recharts';
 import { useBookings } from '@/hooks/useBookings';
 import { useBuses } from '@/hooks/useBuses';
 import { useDrivers } from '@/hooks/useDrivers';
 import { useTransactions } from '@/hooks/useAccounts';
 import { formatCurrency } from '@/lib/currency';
+import { format, subMonths, startOfMonth } from 'date-fns';
 
-const monthlyRevenue = [
-  { month: 'Jan', revenue: 12500, bookings: 245 },
-  { month: 'Feb', revenue: 14200, bookings: 280 },
-  { month: 'Mar', revenue: 15800, bookings: 310 },
-  { month: 'Apr', revenue: 13900, bookings: 275 },
-  { month: 'May', revenue: 16500, bookings: 330 },
-  { month: 'Jun', revenue: 18200, bookings: 365 },
-];
-
-const routePerformance = [
-  { name: 'Nairobi-Mombasa', bookings: 450, revenue: 22500 },
-  { name: 'Nairobi-Kisumu', bookings: 320, revenue: 16000 },
-  { name: 'Nairobi-Nakuru', bookings: 280, revenue: 8400 },
-  { name: 'Mombasa-Malindi', bookings: 180, revenue: 5400 },
-  { name: 'Nairobi-Eldoret', bookings: 220, revenue: 11000 },
-];
-
-const busUtilization = [
-  { name: 'Active', value: 8, color: 'hsl(var(--primary))' },
-  { name: 'Maintenance', value: 2, color: 'hsl(var(--warning))' },
-  { name: 'Out of Service', value: 1, color: 'hsl(var(--destructive))' },
-];
+const CHART_COLORS = {
+  primary: 'hsl(var(--primary))',
+  warning: 'hsl(var(--warning))',
+  destructive: 'hsl(var(--destructive))',
+  success: 'hsl(var(--success))',
+};
 
 export default function ReportsPage() {
   const { data: bookings } = useBookings();
   const { data: buses } = useBuses();
   const { data: drivers } = useDrivers();
   const { data: transactions } = useTransactions();
+  const reportRef = useRef<HTMLDivElement>(null);
 
   const totalRevenue = transactions
     ?.filter((t: any) => t.type === 'income')
@@ -46,8 +34,89 @@ export default function ReportsPage() {
     ?.filter((t: any) => t.type === 'expense')
     .reduce((sum: number, t: any) => sum + Number(t.amount), 0) || 0;
 
+  // Route performance from actual bookings (by route)
+  const routePerformance = useMemo(() => {
+    if (!bookings?.length) return [];
+    const byRoute: Record<string, { bookings: number; revenue: number }> = {};
+    bookings
+      .filter((b: any) => b.status !== 'cancelled')
+      .forEach((b: any) => {
+        const route = b.trip?.route;
+        const name = route
+          ? `${route.origin || 'Origin'}–${route.destination || 'Destination'}`
+          : 'Unknown route';
+        if (!byRoute[name]) byRoute[name] = { bookings: 0, revenue: 0 };
+        byRoute[name].bookings += 1;
+        byRoute[name].revenue += Number(b.total_fare) || 0;
+      });
+    return Object.entries(byRoute)
+      .map(([name, d]) => ({ name, bookings: d.bookings, revenue: d.revenue }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 12);
+  }, [bookings]);
+
+  // Monthly revenue and bookings (last 6 months from bookings)
+  const monthlyRevenue = useMemo(() => {
+    const months: { month: string; revenue: number; bookings: number; key: string }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = subMonths(new Date(), i);
+      months.push({
+        key: format(d, 'yyyy-MM'),
+        month: format(d, 'MMM'),
+        revenue: 0,
+        bookings: 0,
+      });
+    }
+    const start = startOfMonth(subMonths(new Date(), 5));
+    (bookings || [])
+      .filter((b: any) => b.status !== 'cancelled')
+      .forEach((b: any) => {
+        const d = new Date(b.booked_at);
+        if (d < start) return;
+        const key = format(d, 'yyyy-MM');
+        const row = months.find((m) => m.key === key);
+        if (row) {
+          row.bookings += 1;
+          row.revenue += Number((b as any).total_fare) || 0;
+        }
+      });
+    return months.map(({ month, revenue, bookings: count }) => ({ month, revenue, bookings: count }));
+  }, [bookings]);
+
+  // Bus utilization from actual buses
+  const busUtilization = useMemo(() => {
+    if (!buses?.length) {
+      return [
+        { name: 'Active', value: 0, color: CHART_COLORS.primary },
+        { name: 'Maintenance', value: 0, color: CHART_COLORS.warning },
+        { name: 'Out of Service', value: 0, color: CHART_COLORS.destructive },
+      ];
+    }
+    const active = buses.filter((b: any) => b.status === 'active').length;
+    const maintenance = buses.filter((b: any) => b.status === 'maintenance').length;
+    const out = buses.filter((b: any) => b.status === 'out_of_service' || (b.status && b.status !== 'active' && b.status !== 'maintenance')).length;
+    const list = [
+      { name: 'Active', value: active, color: CHART_COLORS.primary },
+      { name: 'Maintenance', value: maintenance, color: CHART_COLORS.warning },
+      { name: 'Out of Service', value: out || 0, color: CHART_COLORS.destructive },
+    ];
+    return list.some((d) => d.value > 0) ? list.filter((d) => d.value > 0) : list;
+  }, [buses]);
+
+  const handlePrint = () => {
+    window.print();
+  };
+
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div ref={reportRef} className="reports-print-area space-y-6 animate-fade-in">
+      <style>{`
+        @media print {
+          [data-sidebar="sidebar"] { display: none !important; }
+          header[class*="flex"][class*="h-14"] { display: none !important; }
+          .reports-print-area { padding: 0 !important; }
+          .print\\:hidden { display: none !important; }
+        }
+      `}</style>
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-display font-bold">Reports & Analytics</h1>
@@ -55,17 +124,23 @@ export default function ReportsPage() {
             Insights and performance metrics for your fleet
           </p>
         </div>
-        <Select defaultValue="6months">
-          <SelectTrigger className="w-40">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="7days">Last 7 Days</SelectItem>
-            <SelectItem value="30days">Last 30 Days</SelectItem>
-            <SelectItem value="6months">Last 6 Months</SelectItem>
-            <SelectItem value="1year">Last Year</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Select defaultValue="6months">
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="7days">Last 7 Days</SelectItem>
+              <SelectItem value="30days">Last 30 Days</SelectItem>
+              <SelectItem value="6months">Last 6 Months</SelectItem>
+              <SelectItem value="1year">Last Year</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button onClick={handlePrint} variant="outline" size="sm" className="gap-2 print:hidden">
+            <Printer className="h-4 w-4" />
+            Print report
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -211,6 +286,7 @@ export default function ReportsPage() {
                   />
                   <Legend />
                   <Bar dataKey="bookings" fill="hsl(var(--primary))" name="Bookings" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="revenue" fill="hsl(var(--success))" name="Revenue (₦)" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
