@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -11,7 +11,7 @@ import { useDrivers } from '@/hooks/useDrivers';
 import { useTransactions } from '@/hooks/useAccounts';
 import { useAllRoutes } from '@/hooks/useRoutes';
 import { formatCurrency } from '@/lib/currency';
-import { format, subMonths, startOfMonth } from 'date-fns';
+import { format, subMonths, startOfMonth, subDays, subYears } from 'date-fns';
 
 const CHART_COLORS = {
   primary: 'hsl(var(--primary))',
@@ -27,6 +27,7 @@ export default function ReportsPage() {
   const { data: drivers } = useDrivers();
   const { data: transactions } = useTransactions();
   const reportRef = useRef<HTMLDivElement>(null);
+  const [routePeriod, setRoutePeriod] = useState<'week' | 'month' | 'year'>('month');
 
   const totalRevenue = transactions
     ?.filter((t: any) => t.type === 'income')
@@ -36,17 +37,31 @@ export default function ReportsPage() {
     ?.filter((t: any) => t.type === 'expense')
     .reduce((sum: number, t: any) => sum + Number(t.amount), 0) || 0;
 
-  // Route performance: all routes from DB, with bookings/revenue from actual bookings (0 if none)
+  // Route performance: filter by period (week/month/year), aggregate, then top 10 routes
   const routePerformance = useMemo(() => {
+    const now = new Date();
+    const cutoff =
+      routePeriod === 'week'
+        ? subDays(now, 7)
+        : routePeriod === 'month'
+          ? subMonths(now, 1)
+          : subYears(now, 1);
+
     const byRouteId: Record<string, { bookings: number; revenue: number }> = {};
     (bookings || [])
-      .filter((b: any) => b.status !== 'cancelled' && b.trip_id)
+      .filter(
+        (b: any) =>
+          b.status !== 'cancelled' &&
+          b.trip_id &&
+          new Date(b.booked_at) >= cutoff
+      )
       .forEach((b: any) => {
         const routeId = b.trip?.route_id ?? b.trip?.route?.id ?? 'unknown';
         if (!byRouteId[routeId]) byRouteId[routeId] = { bookings: 0, revenue: 0 };
         byRouteId[routeId].bookings += 1;
         byRouteId[routeId].revenue += Number(b.total_fare) || 0;
       });
+
     if (routes?.length) {
       return (routes as any[])
         .map((r: any) => {
@@ -54,12 +69,16 @@ export default function ReportsPage() {
           const name = `${r.origin || 'Origin'} – ${r.destination || 'Destination'}`;
           return { name, bookings: stats.bookings, revenue: stats.revenue };
         })
-        .sort((a, b) => b.revenue - a.revenue);
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 10);
     }
     // Fallback when routes not loaded: group by route name from booking's trip
     const byName: Record<string, { bookings: number; revenue: number }> = {};
     (bookings || [])
-      .filter((b: any) => b.status !== 'cancelled')
+      .filter(
+        (b: any) =>
+          b.status !== 'cancelled' && new Date(b.booked_at) >= cutoff
+      )
       .forEach((b: any) => {
         const route = b.trip?.route;
         const name = route
@@ -71,8 +90,9 @@ export default function ReportsPage() {
       });
     return Object.entries(byName)
       .map(([name, d]) => ({ name, bookings: d.bookings, revenue: d.revenue }))
-      .sort((a, b) => b.revenue - a.revenue);
-  }, [bookings, routes]);
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 10);
+  }, [bookings, routes, routePeriod]);
 
   // Monthly revenue and bookings (last 6 months from bookings)
   const monthlyRevenue = useMemo(() => {
@@ -287,8 +307,22 @@ export default function ReportsPage() {
         <TabsContent value="routes" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Route Performance</CardTitle>
-              <CardDescription>Bookings and revenue by route</CardDescription>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <CardTitle>Route Performance</CardTitle>
+                  <CardDescription>Top 10 routes by bookings and revenue for the selected period</CardDescription>
+                </div>
+                <Select value={routePeriod} onValueChange={(v: 'week' | 'month' | 'year') => setRoutePeriod(v)}>
+                  <SelectTrigger className="w-36 print:hidden">
+                    <SelectValue placeholder="Period" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="week">This week</SelectItem>
+                    <SelectItem value="month">This month</SelectItem>
+                    <SelectItem value="year">This year</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={400}>
